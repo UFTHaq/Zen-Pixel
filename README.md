@@ -1,2 +1,2 @@
 # Zen-Pixel
-Zen Pixel : Ilustrate Image Pixelation
+Zen Pixel : Illustrate Image Pixelation
