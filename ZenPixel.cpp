@@ -5,6 +5,8 @@
 //
 
 #include <iostream>
+#include <vector>
+#include <string>
 
 #include <raylib.h>
 #include "ZenPixel.h"
@@ -14,8 +16,8 @@
 #define ICON_EXIT                               {"resources/Icons/Exit.png"}
 
 struct RectSize {
-    float w{ 1918 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
-    float h{ 1080 };
+    float w{ 1600 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
+    float h{ 910 };
 };
 
 struct ImageSize {
@@ -44,6 +46,7 @@ struct Plug {
     Rectangle flexible_panel_crop{};
     bool reload_setup{ true };
     ImageSize flexibleSize{};
+    std::vector<std::vector<Color>> ImagePixels{};
 };
 
 Plug ZenPlug{};
@@ -57,14 +60,14 @@ enum TextAlign {
 
 void InitializedFont(void);
 void InitializedIcons(void);
-void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, const Color color);
+void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, float space, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
 
 int main()
 {
     SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN);
-    SetConfigFlags(FLAG_WINDOW_TOPMOST);
+    //SetConfigFlags(FLAG_WINDOW_TOPMOST);
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     SetConfigFlags(FLAG_WINDOW_UNDECORATED);
     SetConfigFlags(FLAG_WINDOW_TRANSPARENT);
@@ -85,6 +88,8 @@ int main()
 
         if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_S) && IsKeyPressed(KEY_C)) {
             Image SS = LoadImageFromScreen();
+            ExportImage(SS, "SS.png");
+
             ImageCrop(&SS, p->flexible_panel_crop);
             ExportImage(SS, "SS-normal.png");
 
@@ -104,7 +109,8 @@ void UpdateDraw()
 {
     p->mousePosition = GetMousePosition();
 
-    RectSize BaseApp{ 1400, 900 };
+    RectSize BaseApp{ 1500, 900 };
+    //RectSize BaseApp{ 1600, 1000 };
     Rectangle BaseAppRect{
         (p->Screen.w - BaseApp.w) / 2,
         (p->Screen.h - BaseApp.h) / 2,
@@ -129,7 +135,7 @@ void UpdateDraw()
     // CUSTOM TITLE BAR
     {
         std::string text{ "ZEN PIXEL" };
-        DrawTextCustom(TitleBarRect, text, CENTER, 0.7F, WHITE);
+        DrawTextCustom(TitleBarRect, text, CENTER, 0.7F, 1.0F,WHITE);
 
         // ZEN ICON
         {
@@ -199,7 +205,7 @@ void UpdateDraw()
         // HEADER
         {
             std::string text{ "DRAG DROP YOUR IMAGE" };
-            DrawTextCustom(PanelHeader, text, CENTER, 0.8F, WHITE);
+            DrawTextCustom(PanelHeader, text, CENTER, 0.8F, 1.0F, WHITE);
         }
 
         RectSize space{ header.w, PanelBase.height * 0.020F };
@@ -264,7 +270,7 @@ void UpdateDraw()
                 {
                     // INPUT IMAGE TEXT
                     std::string text = "INPUT IMAGE";
-                    DrawTextCustom(panel_input_image_name, text, CENTER, 0.9F, WHITE);
+                    DrawTextCustom(panel_input_image_name, text, CENTER, 0.9F, 1.0F, WHITE);
                 }
 
                 if (IsFileDropped()) {
@@ -273,7 +279,7 @@ void UpdateDraw()
                     const char* c_file_path = dropped_file.paths[0];
                     std::string cpp_file_path = std::string(c_file_path);
 
-                    if (IsFileExtension(c_file_path, ".png") || IsFileExtension(c_file_path, ".jpg")) // I dont know why jpg doesnt work.
+                    if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
                     {
                         p->ImageInput = LoadImage(c_file_path);
                         ImageSize imageOldSize = { (float)p->ImageInput.width, (float)p->ImageInput.height };
@@ -306,6 +312,11 @@ void UpdateDraw()
                             };
                         }
                     }
+                    // I dont know why jpg doesnt work.
+                    else if (IsFileExtension(c_file_path, "jpg") || IsFileExtension(c_file_path, "jpeg")) {
+
+                    }
+
                     p->reload_setup = true;
 
                     UnloadDroppedFiles(dropped_file);
@@ -338,30 +349,30 @@ void UpdateDraw()
             // SECTION 1 RIGHT
             {
                 float name_space = p->LabelSize;
-                Rectangle panel_input_image_base{
+                Rectangle panel_output_image_base{
                     rect_r.x,
                     rect_r.y,
                     rect_r.width,
                     rect_r.height - name_space
                 };
-                DrawRectangleLinesEx(panel_input_image_base, 0.5F, WHITE);
+                DrawRectangleLinesEx(panel_output_image_base, 0.5F, WHITE);
 
                 Rectangle panel_output_image_name{
-                    panel_input_image_base.x,
-                    panel_input_image_base.y + panel_input_image_base.height,
-                    panel_input_image_base.width,
+                    panel_output_image_base.x,
+                    panel_output_image_base.y + panel_output_image_base.height,
+                    panel_output_image_base.width,
                     name_space
                 };
-                //DrawRectangleLinesEx(panel_output_image_name, 0.5F, WHITE);
+                DrawRectangleLinesEx(panel_output_image_name, 0.5F, WHITE);
 
                 {
                     // INPUT IMAGE TEXT
                     std::string text = "OUTPUT IMAGE";
-                    DrawTextCustom(panel_output_image_name, text, CENTER, 0.9F, WHITE);
+                    DrawTextCustom(panel_output_image_name, text, CENTER, 0.9F, 1.0F, WHITE);
                 }
 
                 p->flexible_panel_output = {
-                    panel_input_image_base.x + (panel_input_image_base.width - p->flexible_panel_input.width) / 2,
+                    panel_output_image_base.x + (panel_output_image_base.width - p->flexible_panel_input.width) / 2,
                     p->flexible_panel_input.y,
                     p->flexible_panel_input.width,
                     p->flexible_panel_input.height
@@ -381,11 +392,62 @@ void UpdateDraw()
                             0,0,(float)p->texture_output.width, (float)p->texture_output.height
                         };
                         Rectangle dest{ p->flexible_panel_output };
-                        DrawTexturePro(p->texture_output, source, dest, { 0,0 }, 0, WHITE);
+                        //DrawTexturePro(p->texture_output, source, dest, { 0,0 }, 0, WHITE);
                     }
                 }
 
                 DrawRectangleLinesEx(p->flexible_panel_output, 0.5F, WHITE);
+
+                float pad = 2;
+                Rectangle pixelDrawArea = {
+                    p->flexible_panel_output.x + (pad * 1),
+                    p->flexible_panel_output.y + (pad * 1),
+                    p->flexible_panel_output.width - (pad * 2),
+                    p->flexible_panel_output.height - (pad * 2),
+                };
+
+                if (p->texture_input.height != 0) {
+
+                    float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
+                    float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+
+                    Rectangle tiles{};
+                    for (size_t y = 0; y < p->ImagePixels.size(); y++) {
+                        for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
+                            tiles = {
+                                pixelDrawArea.x + (x * tiles_w),
+                                pixelDrawArea.y + (y * tiles_h),
+                                tiles_w,
+                                tiles_h
+                            };
+
+                            float pad = 0.75F;
+                            Rectangle pixel = {
+                                tiles.x + (pad * 1),
+                                tiles.y + (pad * 1),
+                                tiles.width - (pad * 2),
+                                tiles.height - (pad * 2),
+                            };
+
+                            Color colorTile = p->ImagePixels[y][x];
+                            DrawRectangleRec(pixel, colorTile);
+                            //DrawRectangleRounded(pixel, 0.6F, 10, colorTile);
+
+                            float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
+
+                            //Color textColor = (luminance > 140) ? BLACK : WHITE;
+                            Color textColor = (luminance > 128) ? BLACK : WHITE;
+
+                            int w = p->ImagePixels[y].size();
+                            int number = y * w + x;
+
+                            std::string text = std::to_string(number);
+                            DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, textColor);
+                            
+                        }
+                    }
+
+                }
 
             }
 
@@ -403,7 +465,7 @@ void LoadSetup(int new_width, int new_height)
     // TODO: Resizing
     if (p->reload_setup)
     {
-        int pixelate_range = 20;
+        int pixelate_range = 25;
         int new_heightSize = (p->ImageInput.height) / pixelate_range;
         int new_widthSize = int((float(new_heightSize) / new_height) * new_width);
 
@@ -412,31 +474,48 @@ void LoadSetup(int new_width, int new_height)
         Image image_process = ImageCopy(p->ImageInput);
 
         p->ImageOutput = ImageCopy(image_process);
-        ImageResize(&p->ImageOutput, p->flexibleSize.w, p->flexibleSize.h);
+
+        // TODO:
+        // Pixelation will use rectangle and padding
+        // Steps:
+        // 1. Make image small to the wanted pixel size. and store the image matrix size.
+        // 2. Take data color  from it, put in vector.
+        // 3. Make vector matrix Color.
+        // 4. Make the matrix rectangle in output rectangle.
+        // 5. ez pz.
+        //
+
+        // Make it Smaller
         ImageResizeNN(&p->ImageOutput, new_widthSize, new_heightSize);
+
+        int w = p->ImageOutput.width;
+        int h = p->ImageOutput.height;
+
+        Color* colorPointer = LoadImageColors(p->ImageOutput);
+
+        std::vector<Color> smallPixelData{};
+        for (size_t i = 0; i < h * w; i++) {
+            smallPixelData.push_back(colorPointer[i]);
+        }
+
+        std::cout << smallPixelData.size() << std::endl;
+
+        for (auto& i : smallPixelData) {
+            //std::cout << (uint16_t)i.r << " ";
+        }
+
+        std::vector<std::vector<Color>> matrixSmallImage(h, std::vector<Color>(w));
+
+        for (size_t y = 0; y < h; y++) {
+            for (size_t x = 0; x < w; x++) {
+                matrixSmallImage[y][x] = smallPixelData[y * w + x];
+            }
+        }
+
+        p->ImagePixels = matrixSmallImage;
+
+        // Make it Normal size Again
         ImageResizeNN(&p->ImageOutput, p->flexibleSize.w, p->flexibleSize.h);
-
-        // TODO: NEED algorithm to make grid line.
-        //Color gridColor = BLANK;  // Define grid color
-        //int stepX = p->flexibleSize.w / new_widthSize;
-        //int stepY = p->flexibleSize.h / new_heightSize;
-
-        //for (int y = 0; y < p->flexibleSize.h; y += stepY)
-        //{
-        //    for (int x = 0; x < p->flexibleSize.w; x += stepX)
-        //    {
-        //        // Draw horizontal line
-        //        for (int i = 0; i < stepX; i++)
-        //        {
-        //            ImageDrawPixel(&p->ImageOutput, x + i, y, gridColor);
-        //        }
-        //        // Draw vertical line
-        //        for (int j = 0; j < stepY; j++)
-        //        {
-        //            ImageDrawPixel(&p->ImageOutput, x, y + j, gridColor);
-        //        }
-        //    }
-        //}
 
     }
 
@@ -444,10 +523,10 @@ void LoadSetup(int new_width, int new_height)
     p->texture_output = LoadTextureFromImage(p->ImageOutput);
 }
 
-void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, const Color color)
+void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, float space, const Color color)
 {
     float font_size = panel.height * size;
-    float font_space = 1.0F;
+    float font_space = space;
     Vector2 text_measure = MeasureTextEx(p->font, text.c_str(), font_size, font_space);
     Vector2 text_coor{};
     if (align == CENTER) {
@@ -479,7 +558,7 @@ void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, 
 
 void InitializedFont(void)
 {
-    p->font = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 45, 0, 0);
+    p->font = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 40, 0, 0);
     SetTextureFilter(p->font.texture, TEXTURE_FILTER_BILINEAR);
 }
 
