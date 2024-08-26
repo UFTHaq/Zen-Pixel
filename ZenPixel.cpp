@@ -7,8 +7,11 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <algorithm>
+#include <cctype>
 
 #include <raylib.h>
+#include <SFML/Graphics.hpp>
 #include "ZenPixel.h"
 
 #define FONT_LOC_Sofia_Sans_Condensed_MED       {"resources/Fonts/Sofia_Sans_Condensed/static/SofiaSansCondensed-Medium.ttf"}
@@ -16,7 +19,7 @@
 #define ICON_EXIT                               {"resources/Icons/Exit.png"}
 
 struct RectSize {
-    float w{ 1600 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
+    float w{ 1510 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
     float h{ 910 };
 };
 
@@ -25,15 +28,270 @@ struct ImageSize {
     float h{};
 };
 
+struct SliderInput {
+    Rectangle area{};
+    float value{};
+    float minValue{};
+    float maxValue{};
+    bool dragging{};
+
+    Rectangle minValRect{};
+    Rectangle sliderBarRect{};
+    Rectangle maxValRect{};
+
+    SliderInput(Rectangle area, float initialValue, float minValue, float maxValue, bool dragging) :
+        area(area), value(initialValue), minValue(minValue), maxValue(maxValue), dragging(dragging) 
+    {
+        float smallRectWidthCoef = 0.2F;
+        minValRect = {
+            area.x,
+            area.y,
+            area.width * smallRectWidthCoef,
+            area.height
+        };
+
+        sliderBarRect = {
+            minValRect.x + minValRect.width,
+            area.y,
+            area.width * (1.0F - (2 * smallRectWidthCoef)),
+            area.height
+        };
+
+        maxValRect = {
+            sliderBarRect.x + sliderBarRect.width,
+            area.y,
+            area.width * smallRectWidthCoef,
+            area.height
+        };
+
+        float pad = 2;
+        float topPadding = 2.5;
+
+        minValRect = {
+            minValRect.x + (pad * 2),
+            minValRect.y + (pad * topPadding),
+            minValRect.width - (pad * 2 * 2),
+            minValRect.height - (pad * topPadding * 2),
+        };
+
+        sliderBarRect = {
+            sliderBarRect.x + (pad * 2),
+            sliderBarRect.y + (pad * topPadding),
+            sliderBarRect.width - (pad * 2 * 2),
+            sliderBarRect.height - (pad * topPadding * 2),
+        };
+
+        maxValRect = {
+            maxValRect.x + (pad * 2),
+            maxValRect.y + (pad * topPadding),
+            maxValRect.width - (pad * 2 * 2),
+            maxValRect.height - (pad * topPadding * 2),
+        };
+    };
+
+    
+    
+    void Draw() {
+        float fontSize = 0.8F;
+        //DrawRectangleRoundedLines(minValRect, 0.2F, 10, 0.5F, WHITE);
+        DrawTextCustom(minValRect, std::to_string((int)minValue), 1, fontSize, 0, WHITE);
+
+        //DrawRectangleRoundedLines(maxValRect, 0.2F, 10, 0.5F, WHITE);
+        DrawTextCustom(maxValRect, std::to_string((int)maxValue), 1, fontSize, 0, WHITE);
+
+        float handleX = sliderBarRect.x + ((value - minValue) / (maxValue - minValue)) * sliderBarRect.width;
+        float handleW = 15;
+        Rectangle handleRect{
+            handleX - (handleW * 0.5F),
+            sliderBarRect.y,
+            handleW,
+            sliderBarRect.height
+        };
+        const Color color{ 79, 100, 166, 255 };
+
+
+        Rectangle SliderBarRectWithPad{
+            sliderBarRect.x - (handleW * 0.5F),
+            sliderBarRect.y,
+            sliderBarRect.width + (handleW * 1),
+            sliderBarRect.height
+        };
+        //DrawRectangleRoundedLines(SliderBarRectWithPad, 0.0F, 10, 0.5F, WHITE);
+        DrawRectangleRounded(SliderBarRectWithPad, 0.2F, 10, { 25,32,45,255 });
+        DrawRectangleRounded(handleRect, 0.2F, 10, color);
+        DrawTextCustom(SliderBarRectWithPad, std::to_string((int)value), 1, fontSize, 0, WHITE);
+    }
+
+
+    void Update() {
+        Vector2 mousePos = GetMousePosition();
+
+        if (CheckCollisionPointRec(mousePos, sliderBarRect) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+            dragging = true;
+        }
+
+        if (dragging) {
+            if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+                dragging = false;
+            }
+            else {
+                float normalizedValue = (mousePos.x - sliderBarRect.x) / sliderBarRect.width;
+                value = minValue + normalizedValue * (maxValue - minValue);
+
+            }
+        }
+
+        if (CheckCollisionPointRec(mousePos, sliderBarRect)) {
+            float mouseWheelStep = 1;
+            float wheelDelta = GetMouseWheelMove();
+            value += wheelDelta * mouseWheelStep;
+        }
+
+        if (value < minValue) value = minValue;
+        if (value > maxValue) value = maxValue;
+    }
+
+    void Run() {
+        Update();
+        Draw();
+    }
+
+    float GetValue() const {
+        return value;
+    }
+
+};
+
+enum Numbering {
+    OFF,
+    ON,
+};
+
+struct ButtonNumbering {
+    const bool isNumbering{};
+    bool isChoosen{};
+
+    std::string textDisplay{};
+    bool isHover{};
+    const Color colorPressed{ 79, 100, 166, 255 };
+    const Color colorNormal{ 180, 180, 180, 255 };
+
+    ButtonNumbering(const bool isNumbering, bool isChoosen)
+        : isNumbering(isNumbering), isChoosen(isChoosen) {};
+
+    void chooseThisButton() {
+        isChoosen = true;
+    }
+
+    void resetChosen() {
+        isChoosen = false;
+    }
+
+    std::string getTextDisplay() {
+        if (isNumbering == ON) return textDisplay = "ON";
+        else return textDisplay = "OFF";
+    }
+
+    bool getIsNumbering() {
+        return isNumbering;
+    }
+
+    Color getColorButton() const {
+        if (isChoosen || isHover) return colorPressed;
+        else return colorNormal;
+    }
+
+    Color getColorText() const {
+        return isChoosen ? WHITE : BLACK;
+    }
+};
+
+struct ButtonNumber {
+    std::string textDisplay{};
+    bool isChoosen{};
+    bool isHover{};
+    const Color colorPressed{ 79, 100, 166, 255 };
+    const Color colorNormal{ 180, 180, 180, 255 };
+
+    ButtonNumber
+    (
+        const std::string textDisplay, bool isChoosen
+    ) :
+        textDisplay(textDisplay), isChoosen(isChoosen) {};
+
+    void chooseThisButton() {
+        isChoosen = true;
+    }
+
+    void resetChosen() {
+        isChoosen = false;
+    }
+
+    std::string getNumber() const {
+        return textDisplay;
+    }
+
+    Color getColorButton() const {
+        if (isChoosen || isHover) return colorPressed;
+        else return colorNormal;
+    }
+
+    Color getColorText() const {
+        return isChoosen ? WHITE : BLACK;
+    }
+};
+
+struct ButtonExportFormat {
+    std::string textDisplay{};
+    bool isChoosen{};
+    bool isHover{};
+    const Color colorPressed{ 79, 100, 166, 255 };
+    const Color colorNormal{ 180, 180, 180, 255 };
+
+    ButtonExportFormat
+    (
+        const std::string textDisplay, bool isChoosen
+    ) :
+        textDisplay(textDisplay), isChoosen(isChoosen) {};
+
+    void chooseThisButton() {
+        isChoosen = true;
+    }
+
+    void resetChosen() {
+        isChoosen = false;
+    }
+
+    std::string getFormatDisplay() const {
+        std::string textFormat = textDisplay;
+        std::transform(textFormat.begin(), textFormat.end(), textFormat.begin(), [](unsigned char c) {
+            return std::tolower(c);
+            });
+        return "." + textFormat;
+    }
+
+    Color getColorButton() const {
+        if (isChoosen || isHover) return colorPressed;
+        else return colorNormal;
+    }
+
+    Color getColorText() const {
+        return isChoosen ? WHITE : BLACK;
+    }
+};
+
 struct Plug {
     std::string AppTitle{ "ZEN PIXEL" };
     RectSize Screen{};
     Vector2 mousePosition{};
     //Color ColorLayer1    { 40,40,40, 90 };
     Color ColorLayer1    { BLANK };
-    Color ColorLayer2    { 25,33,50,255 };
-    Color ColorTitleBar  { 18,24,36,255 };
-    Font font{};
+    Color ColorLayer2    { 25,32,45,255 };
+    Color ColorTitleBar  { 18,26,35,255 };
+    Color ColorPanel     { 40,48,60,255 };
+    Color ColorPanel2    { 20,25,27,255 };
+    Font fontGeneral{};
+    Font fontNumber{};
     Texture2D TexZEN{};
     Texture2D TexExit{};
     float LabelSize{ 30 };
@@ -47,6 +305,21 @@ struct Plug {
     bool reload_setup{ true };
     ImageSize flexibleSize{};
     std::vector<std::vector<Color>> ImagePixels{};
+    std::vector<std::string> setupParameter{ "NUMBERING", "NUMBER", "SPACE", "CORNER", "PIXEL RANGE", "TITLE", "FORMAT" };
+    std::vector<ButtonNumbering> argumentNumbering{ {ON, 1}, {OFF, 0} };
+    std::vector<ButtonNumber> argumentNumber{ {"CASUAL", 0}, {"INDEX", 1} };
+    std::vector<ButtonExportFormat> argumentFormat{ {"PNG", 1}, {"JPG", 0} };
+
+    bool g_numbering{};
+    std::string g_number{};
+    std::string g_title{};
+    std::string g_format{};
+    int g_pixelatedRange{10};
+    int g_corner{};
+    int g_space{};
+    std::string g_inputTitle{};
+
+    bool g_exporting{};
 };
 
 Plug ZenPlug{};
@@ -60,9 +333,14 @@ enum TextAlign {
 
 void InitializedFont(void);
 void InitializedIcons(void);
-void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, float space, const Color color);
+void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
+
+void InputTextBox(Rectangle& inputTitleBase);
+
+Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
+void Exporting();
 
 int main()
 {
@@ -86,11 +364,20 @@ int main()
 
         EndDrawing();
 
+        Exporting();
+
+        if (p->g_exporting) {
+            Exporting();
+        }
+
         if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_S) && IsKeyPressed(KEY_C)) {
             Image SS = LoadImageFromScreen();
             ExportImage(SS, "SS.png");
 
-            ImageCrop(&SS, p->flexible_panel_crop);
+            // BUG Notice Untuk Ratio 3:2 seperti 600:400 dll, Failed to Export.
+            // Tambahan bahwa ratio yang semakin dekat Area juga Failed to Export.
+            //
+            ImageCrop(&SS, p->flexible_panel_crop); 
             ExportImage(SS, "SS-normal.png");
 
             Image SS_resize = ImageCopy(SS);
@@ -100,9 +387,77 @@ int main()
             Image SS_resizeNN = ImageCopy(SS);
             ImageResize(&SS_resizeNN, int(p->flexible_panel_crop.width * 2), int(p->flexible_panel_crop.height * 2));
             ExportImage(SS_resizeNN, "SS_resizeNN.png");
+            ExportImage(SS_resizeNN, "SS_resizeNN.jpg");
         }
     }
     CloseWindow();
+}
+
+void Exporting() {
+    if (!p->g_inputTitle.empty()) {
+        // Process Export and Notification Success
+
+        if (p->g_format == ".png") {
+            Image SS = LoadImageFromScreen();
+            std::string title = p->g_inputTitle + p->g_format;
+
+            ImageCrop(&SS, p->flexible_panel_crop);
+            ExportImage(SS, title.c_str());
+
+        }
+        else if (p->g_format == ".jpg") {
+            // JPG WILL HANDLED BY SFML.
+            {
+                Image SS = LoadImageFromScreen();
+                ImageCrop(&SS, p->flexible_panel_crop);
+
+                int w = SS.width;
+                int h = SS.height;
+
+                Color* colorPointer = LoadImageColors(SS);
+
+                std::vector<Color> ColorsData{};
+                ColorsData.reserve(w * h);
+                for (size_t i = 0; i < h * w; i++) {
+                    ColorsData.push_back(colorPointer[i]);
+                }
+
+                std::vector<sf::Uint8> pixelData{};
+                pixelData.reserve(w * h * 4);
+
+                for (const auto& color : ColorsData) {
+                    pixelData.push_back(color.r);
+                    pixelData.push_back(color.g);
+                    pixelData.push_back(color.b);
+                    pixelData.push_back(color.a);
+                }
+
+                // Load Image with SFML from vector Color
+                sf::Image imageSFML{};
+                imageSFML.create(w, h, pixelData.data());
+
+                std::string title = p->g_inputTitle + p->g_format;
+
+                // SAVE IMAGE JPG
+                if (imageSFML.saveToFile(title)) {
+                    std::string log = "FILEIO: [" + title + "] File exported succesfully";
+                    TraceLog(LOG_INFO, log.c_str());
+                }
+                else {
+                    std::string log = "FILEIO: [" + title + "] File exporting failed";
+                    TraceLog(LOG_ERROR, log.c_str());
+                }
+
+                UnloadImageColors(colorPointer);
+                UnloadImage(SS);
+            }
+        }
+    }
+    else {
+        // Notification Failed
+    }
+
+    p->g_exporting = false;
 }
 
 void UpdateDraw()
@@ -135,7 +490,7 @@ void UpdateDraw()
     // CUSTOM TITLE BAR
     {
         std::string text{ "ZEN PIXEL" };
-        DrawTextCustom(TitleBarRect, text, CENTER, 0.7F, 1.0F,WHITE);
+        DrawTextCustom(TitleBarRect, text, CENTER, 0.7F, 1.0F, p->fontGeneral, WHITE);
 
         // ZEN ICON
         {
@@ -193,271 +548,704 @@ void UpdateDraw()
         };
         //DrawRectangleLinesEx(PanelBase, 0.5F, WHITE);
 
-        RectSize header{ PanelBase.width, PanelBase.height * 0.05F };
-        Rectangle PanelHeader{
-            PanelBase.x,
-            PanelBase.y,
-            header.w,
-            header.h,
-        };
-        DrawRectangleLinesEx(PanelHeader, 0.5F, WHITE);
 
-        // HEADER
+        // NEW LAYOUT
+        if (1)
         {
-            std::string text{ "DRAG DROP YOUR IMAGE" };
-            DrawTextCustom(PanelHeader, text, CENTER, 0.8F, 1.0F, WHITE);
-        }
-
-        RectSize space{ header.w, PanelBase.height * 0.020F };
-        RectSize section1{ header.w, PanelBase.height * 0.7F };
-        Rectangle PanelSection1{
-            PanelHeader.x,
-            PanelHeader.y + PanelHeader.height + space.h,
-            section1.w,
-            section1.h,
-        };
-        DrawRectangleLinesEx(PanelSection1, 0.5F, WHITE);
-
-        RectSize footer{ header.w, PanelBase.height * (1.0F - 0.05F - (0.020F * 2) - 0.7F) };
-        Rectangle PanelFooter{
-            PanelSection1.x,
-            PanelSection1.y + PanelSection1.height + space.h,
-            footer.w,
-            footer.h,
-        };
-        DrawRectangleLinesEx(PanelFooter, 0.5F, WHITE);
-
-
-        // SECTION 1
-        {
-            Rectangle& panel = PanelSection1;
-            float space = 0.01F * panel.width;
-            Rectangle rect_l{
-                panel.x,
-                panel.y,
-                panel.width / 2 - space,
-                panel.height
+            float spacing{ 10 };
+            Rectangle MainLeftSection{
+                PanelBase.x,
+                PanelBase.y,
+                PanelBase.width * 0.24F + spacing,
+                PanelBase.height
             };
-            DrawRectangleLinesEx(rect_l, 0.5F, WHITE);
 
-            Rectangle rect_r{
-                rect_l.x + rect_l.width + space + space,
-                rect_l.y,
-                rect_l.width,
-                rect_l.height
+            Rectangle MainRightSection{
+                MainLeftSection.x + MainLeftSection.width + spacing,
+                MainLeftSection.y,
+                PanelBase.width - MainLeftSection.width - spacing,
+                MainLeftSection.height
             };
-            DrawRectangleLinesEx(rect_r, 0.5F, WHITE);
 
-            // SECTION 1 LEFT
+            // MainLeftSection
             {
-                float name_space = p->LabelSize;
-                Rectangle panel_input_image_base{
-                    rect_l.x,
-                    rect_l.y,
-                    rect_l.width,
-                    rect_l.height - name_space
+                Rectangle PanelInputImage{
+                    MainLeftSection.x,
+                    MainLeftSection.y,
+                    MainLeftSection.width,
+                    MainLeftSection.height * 0.5F + spacing
                 };
-                DrawRectangleLinesEx(panel_input_image_base, 0.5F, WHITE);
+                //DrawRectangleLinesEx(PanelInputImage, 0.5F, WHITE);
+                DrawRectangleRounded(PanelInputImage, 0.05F, 10, p->ColorPanel);
 
-                Rectangle panel_input_image_name{
-                    panel_input_image_base.x,
-                    panel_input_image_base.y + panel_input_image_base.height,
-                    panel_input_image_base.width,
-                    name_space
-                };
-                DrawRectangleLinesEx(panel_input_image_name, 0.5F, WHITE);
-
+                // PanelInputImage
                 {
-                    // INPUT IMAGE TEXT
-                    std::string text = "INPUT IMAGE";
-                    DrawTextCustom(panel_input_image_name, text, CENTER, 0.9F, 1.0F, WHITE);
+                    // DRAGDROP INFORMATION
+                    if (p->texture_input.height == 0) 
+                    {
+                        std::string text{ "DRAG DROP YOUR IMAGE" };
+                        DrawTextCustom(PanelInputImage, text, CENTER, 0.06F, 1.0F, p->fontGeneral, WHITE);
+                    }
+
+                    // DRAGDROP HANDLER
+                    if (IsFileDropped()) {
+                        FilePathList dropped_file = LoadDroppedFiles();
+
+                        const char* c_file_path = dropped_file.paths[0];
+                        std::string cpp_file_path = std::string(c_file_path);
+
+                        if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
+                        {
+                            p->ImageInput = LoadImage(c_file_path);
+                            ImageSize imageOldSize = { (float)p->ImageInput.width, (float)p->ImageInput.height };
+
+                            //int new_height = 40;
+                            int new_height = p->ImageInput.height;
+                            int new_width = int((float(new_height) / imageOldSize.h) * imageOldSize.w);
+                            std::cout << "height: " << new_height << "\nwidth: " << new_width << std::endl;
+                            ImageSize imageNewSize = { (float)new_width, (float)new_height };
+                            p->flexibleSize = imageNewSize;
+
+                            p->flexible_panel_input = FlexibleRectangle(PanelInputImage, imageNewSize.w, imageNewSize.h);
+
+                        }
+                        // I dont know why jpg doesnt work.
+                        else if (IsFileExtension(c_file_path, "jpg") || IsFileExtension(c_file_path, "jpeg")) {
+
+                        }
+
+                        p->reload_setup = true;
+
+                        UnloadDroppedFiles(dropped_file);
+                    }
+
+                    // DRAW INPUT TEXTURE
+                    if (p->reload_setup) {
+                        LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
+                        p->reload_setup = false;
+                    }
+
+                    if (p->texture_input.height != 0) {
+                        // Draw input
+                        {
+                            Rectangle source{
+                                0,0,(float)p->texture_input.width, (float)p->texture_input.height
+                            };
+                            Rectangle dest{ p->flexible_panel_input };
+                            DrawTexturePro(p->texture_input, source, dest, { 0,0 }, 0, WHITE);
+                        }
+                    }
+                    //DrawRectangleLinesEx(p->flexible_panel_input, 0.5F, WHITE);
+                    DrawRectangleLinesEx(p->flexible_panel_input, 1.5F, p->ColorTitleBar);
+
+
                 }
 
-                if (IsFileDropped()) {
-                    FilePathList dropped_file = LoadDroppedFiles();
+                Rectangle SetupSection{
+                    PanelInputImage.x,
+                    PanelInputImage.y + PanelInputImage.height + spacing,
+                    PanelInputImage.width,
+                    MainLeftSection.height - PanelInputImage.height - spacing
+                };
+                DrawRectangleRounded(SetupSection, 0.05F, 10, p->ColorPanel);
 
-                    const char* c_file_path = dropped_file.paths[0];
-                    std::string cpp_file_path = std::string(c_file_path);
+                // Membuat Margin
+                float padTopBot = 10;
+                SetupSection = {
+                    SetupSection.x,
+                    SetupSection.y + (padTopBot * 1),
+                    SetupSection.width,
+                    SetupSection.height - (padTopBot * 2)
+                };
 
-                    if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
-                    {
-                        p->ImageInput = LoadImage(c_file_path);
-                        ImageSize imageOldSize = { (float)p->ImageInput.width, (float)p->ImageInput.height };
+                Rectangle PanelParameter{
+                    SetupSection.x,
+                    SetupSection.y,
+                    SetupSection.width * 0.35F + spacing,
+                    SetupSection.height
+                };
+                //DrawRectangleLinesEx(PanelParameter, 0.5F, WHITE);
 
-                        //int new_height = 40;
-                        int new_height = p->ImageInput.height;
-                        int new_width = int((float(new_height) / imageOldSize.h) * imageOldSize.w);
-                        std::cout << "height: " << new_height << "\nwidth: " << new_width << std::endl;
-                        ImageSize imageNewSize = { (float)new_width, (float)new_height };
-                        p->flexibleSize = imageNewSize;
+                Rectangle PanelArgument{
+                    PanelParameter.x + PanelParameter.width + spacing,
+                    PanelParameter.y,
+                    (SetupSection.width - PanelParameter.width - spacing) * 0.975F,
+                    PanelParameter.height
+                };
+                //DrawRectangleLinesEx(PanelArgument, 0.5F, WHITE);
 
-                        if (imageNewSize.w > imageNewSize.h) {
-                            float w = panel_input_image_base.width;
-                            float h = imageNewSize.h / imageNewSize.w * panel_input_image_base.width;
-                            p->flexible_panel_input = {
-                                panel_input_image_base.x + (panel_input_image_base.width - w) / 2,
-                                panel_input_image_base.y + (panel_input_image_base.height - h) / 2,
-                                w,
-                                h
+                // SetupSection
+                {
+                    size_t parameterCounts = p->setupParameter.size();
+                    for (size_t i = 0; i < parameterCounts; i++) {
+                        // PanelParameter
+                        {
+                            Rectangle parameter{
+                                PanelParameter.x,
+                                PanelParameter.y + (i * PanelParameter.height / parameterCounts),
+                                PanelParameter.width,
+                                PanelParameter.height / parameterCounts
                             };
+                            //DrawRectangleLinesEx(parameter, 0.2F, WHITE);
+
+                            std::string text = p->setupParameter.at(i);
+                            DrawTextCustom(parameter, text, LEFT, 0.55F, 1.0F, p->fontGeneral, WHITE);
+                        }
+
+                        // PanelArgument
+                        {
+                            Rectangle argument{
+                                PanelArgument.x,
+                                PanelArgument.y + (i * PanelArgument.height / parameterCounts),
+                                PanelArgument.width,
+                                PanelArgument.height / parameterCounts
+                            };
+                            //DrawRectangleLinesEx(argument, 0.2F, WHITE);
+
+                            float buttonPad = 5;
+                            float buttonPadFactor = 1.25F;
+
+                            if (p->setupParameter.at(i) == "NUMBERING") {
+                            //if (i == 0) {
+                                size_t buttonCounts = p->argumentNumbering.size();
+                                for (size_t j = 0; j < buttonCounts; j++) {
+                                    auto& ObjectButtonNumbering = p->argumentNumbering.at(j);
+
+                                    Rectangle buttonBase{
+                                        argument.x + (j * argument.width / buttonCounts),
+                                        argument.y,
+                                        argument.width / buttonCounts,
+                                        argument.height
+                                    };
+                                    //DrawRectangleLinesEx(buttonBase, 0.5F, WHITE);
+
+                                    Rectangle ButtonNumberingRect{
+                                        buttonBase.x + (buttonPad * 1),
+                                        buttonBase.y + (buttonPad * buttonPadFactor),
+                                        buttonBase.width - (buttonPad * 2),
+                                        buttonBase.height - (buttonPad * 2 * buttonPadFactor)
+                                    };
+
+                                    if (CheckCollisionPointRec(p->mousePosition, ButtonNumberingRect)) {
+                                        ObjectButtonNumbering.isHover = true;
+
+                                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                            for (auto& button : p->argumentNumbering) {
+                                                button.resetChosen();
+                                            }
+                                            ObjectButtonNumbering.chooseThisButton();
+                                        }
+                                    }
+                                    else {
+                                        ObjectButtonNumbering.isHover = false;
+                                    }
+
+                                    if (ObjectButtonNumbering.isChoosen) {
+                                        p->g_numbering = ObjectButtonNumbering.getIsNumbering();
+                                    }
+
+                                    DrawRectangleRounded(ButtonNumberingRect, 0.2F, 10, ObjectButtonNumbering.getColorButton());
+                                    std::string text = ObjectButtonNumbering.getTextDisplay();
+                                    DrawTextCustom(ButtonNumberingRect, text, CENTER, 0.75F, 1.0F, p->fontGeneral, ObjectButtonNumbering.getColorText());
+                                }
+                            }
+                            else if (p->setupParameter.at(i) == "NUMBER") {
+
+                                size_t buttonCounts = p->argumentNumber.size();
+                                for (size_t j = 0; j < buttonCounts; j++) {
+                                    auto& ObjectButtonNumber = p->argumentNumber.at(j);
+
+                                    Rectangle buttonBase{
+                                        argument.x + (j * argument.width / buttonCounts),
+                                        argument.y,
+                                        argument.width / buttonCounts,
+                                        argument.height
+                                    };
+                                    //DrawRectangleLinesEx(buttonBase, 0.5F, WHITE);
+
+                                    Rectangle ButtonNumberRect{
+                                        buttonBase.x + (buttonPad * 1),
+                                        buttonBase.y + (buttonPad * buttonPadFactor),
+                                        buttonBase.width - (buttonPad * 2),
+                                        buttonBase.height - (buttonPad * 2 * buttonPadFactor)
+                                    };
+
+                                    if (CheckCollisionPointRec(p->mousePosition, ButtonNumberRect)) {
+                                        ObjectButtonNumber.isHover = true;
+
+                                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                            for (auto& button : p->argumentNumber) {
+                                                button.resetChosen();
+                                            }
+                                            ObjectButtonNumber.chooseThisButton();
+                                        }
+                                    }
+                                    else {
+                                        ObjectButtonNumber.isHover = false;
+                                    }
+
+                                    if (ObjectButtonNumber.isChoosen) {
+                                        p->g_number = ObjectButtonNumber.getNumber();
+                                    }
+
+                                    DrawRectangleRounded(ButtonNumberRect, 0.2F, 10, ObjectButtonNumber.getColorButton());
+                                    std::string text = ObjectButtonNumber.textDisplay;
+                                    DrawTextCustom(ButtonNumberRect, text, CENTER, 0.75F, 1.0F, p->fontGeneral, ObjectButtonNumber.getColorText());
+
+                                }
+                            }
+                            else if (p->setupParameter.at(i) == "SPACE") {
+
+                                static SliderInput SliderSpace{ argument, 2, -5, 5, false };
+                                SliderSpace.Run();
+
+                                if (CheckCollisionPointRec(p->mousePosition, argument)) {
+                                    int newVal = (int)SliderSpace.GetValue();
+                                    static int oldVal = newVal;
+
+                                    if (newVal != oldVal) {
+                                        p->reload_setup = true;
+                                        p->g_space = newVal;
+                                        oldVal = newVal;
+                                    }
+                                    else {
+                                        p->reload_setup = false;
+                                    }
+                                }
+
+                            }
+                            else if (p->setupParameter.at(i) == "CORNER") {
+
+                                static SliderInput SliderSpace{ argument, 5, 0, 10, false };
+                                SliderSpace.Run();
+
+                                if (CheckCollisionPointRec(p->mousePosition, argument)) {
+                                    int newVal = (int)SliderSpace.GetValue();
+                                    static int oldVal = newVal;
+
+                                    if (newVal != oldVal) {
+                                        p->reload_setup = true;
+                                        p->g_corner = newVal;
+                                        oldVal = newVal;
+                                    }
+                                    else {
+                                        p->reload_setup = false;
+                                    }
+                                }
+
+                            }
+                            else if (p->setupParameter.at(i) == "PIXEL RANGE") {
+
+                                static SliderInput SliderSpace{ argument, 20, 4, 40, false };
+                                SliderSpace.Run();
+
+                                if (CheckCollisionPointRec(p->mousePosition, argument)) {
+                                    int newVal = (int)SliderSpace.GetValue();
+                                    static int oldVal = newVal;
+
+                                    if (newVal != oldVal) {
+                                        p->reload_setup = true;
+                                        p->g_pixelatedRange = newVal;
+                                        oldVal = newVal;
+                                    }
+                                    else {
+                                        p->reload_setup = false;
+                                    }
+                                }
+                            }
+                            else if (p->setupParameter.at(i) == "TITLE") {
+
+                                Rectangle inputTitleBase{
+                                    argument.x + (buttonPad * 1),
+                                    argument.y + (buttonPad * buttonPadFactor),
+                                    argument.width - (buttonPad * 2),
+                                    argument.height - (buttonPad * 2 * buttonPadFactor)
+                                };
+                                DrawRectangleRounded(inputTitleBase, 0.1F, 10, RAYWHITE);
+
+                                InputTextBox(inputTitleBase);
+
+                            }
+                            else if (p->setupParameter.at(i) == "FORMAT") {
+
+                                size_t buttonCounts = p->argumentFormat.size();
+                                for (size_t j = 0; j < buttonCounts; j++) {
+                                    auto& ObjectButtonFormat = p->argumentFormat.at(j);
+
+                                    Rectangle buttonBase{
+                                        argument.x + (j * argument.width / buttonCounts),
+                                        argument.y,
+                                        argument.width / buttonCounts,
+                                        argument.height
+                                    };
+                                    //DrawRectangleLinesEx(buttonBase, 0.5F, WHITE);
+                                    
+                                    Rectangle ButtonFormatRect{
+                                        buttonBase.x + (buttonPad * 1),
+                                        buttonBase.y + (buttonPad * buttonPadFactor),
+                                        buttonBase.width - (buttonPad * 2),
+                                        buttonBase.height - (buttonPad * 2 * buttonPadFactor)
+                                    };
+
+                                    if (CheckCollisionPointRec(p->mousePosition, ButtonFormatRect)) {
+                                        ObjectButtonFormat.isHover = true;
+
+                                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                            for (auto& button : p->argumentFormat) {
+                                                button.resetChosen();
+                                            }
+                                            ObjectButtonFormat.chooseThisButton();
+                                        }
+                                    }
+                                    else {
+                                        ObjectButtonFormat.isHover = false;
+                                    }
+
+                                    if (ObjectButtonFormat.isChoosen) {
+                                        p->g_format = ObjectButtonFormat.getFormatDisplay();
+                                    }
+
+                                    DrawRectangleRounded(ButtonFormatRect, 0.2F, 10, ObjectButtonFormat.getColorButton());
+                                    std::string text = ObjectButtonFormat.textDisplay;
+                                    DrawTextCustom(ButtonFormatRect, text, CENTER, 0.75F, 1.0F, p->fontGeneral, ObjectButtonFormat.getColorText());
+
+                                }
+                            }
+
+                        }
+
+
+
+                    }
+
+
+
+                }
+
+
+
+            }
+
+            // MainRightSection
+            {
+                Rectangle PanelOutputImage{
+                    MainRightSection.x,
+                    MainRightSection.y,
+                    PanelBase.width - MainLeftSection.width - spacing,
+                    MainRightSection.height * 0.92F + spacing,
+                };
+                //DrawRectangleLinesEx(PanelOutputImage, 0.5F, WHITE);
+                DrawRectangleRounded(PanelOutputImage, 0.02F, 10, p->ColorPanel);
+
+                // PanelOutputImage
+                {
+                    p->flexible_panel_output = FlexibleRectangle(PanelOutputImage, p->flexible_panel_input.width, p->flexible_panel_input.height);
+
+                    //p->flexible_panel_output = {
+
+                    p->flexible_panel_crop = {
+                        p->flexible_panel_output.x,
+                        p->flexible_panel_output.y,
+                        p->flexible_panel_output.width + 1,
+                        p->flexible_panel_output.height + 1,
+                    };
+
+                    if (p->texture_input.height != 0) {
+                        // Draw output
+                        {
+                            Rectangle source{
+                                0,0,(float)p->texture_output.width, (float)p->texture_output.height
+                            };
+                            Rectangle dest{ p->flexible_panel_output };
+                            //DrawTexturePro(p->texture_output, source, dest, { 0,0 }, 0, WHITE);
+                        }
+                        
+                        //DrawRectangleLinesEx(p->flexible_panel_output, 0.5F, WHITE);
+                        DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
+                    }
+
+
+                    float pad = 2;
+                    Rectangle pixelDrawArea = {
+                        p->flexible_panel_output.x + (pad * 1),
+                        p->flexible_panel_output.y + (pad * 1),
+                        p->flexible_panel_output.width - (pad * 2),
+                        p->flexible_panel_output.height - (pad * 2),
+                    };
+
+                    if (p->texture_input.height != 0) {
+
+                        float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
+                        float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+
+                        Rectangle tiles{};
+                        for (size_t y = 0; y < p->ImagePixels.size(); y++) {
+                            for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
+                                tiles = {
+                                    pixelDrawArea.x + (x * tiles_w),
+                                    pixelDrawArea.y + (y * tiles_h),
+                                    tiles_w,
+                                    tiles_h
+                                };
+
+                                float pad = p->g_space * 0.3F;
+                                float corner = p->g_corner * 0.1F;
+                                Rectangle pixel = {
+                                    tiles.x + (pad * 1),
+                                    tiles.y + (pad * 1),
+                                    tiles.width - (pad * 2),
+                                    tiles.height - (pad * 2),
+                                };
+
+                                Color colorTile = p->ImagePixels[y][x];
+                                //DrawRectangleRec(pixel, colorTile);
+                                DrawRectangleRounded(pixel, corner, 10, colorTile);
+
+                                float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
+
+                                Color textColor = (luminance > 128) ? BLACK : WHITE;
+
+                                int w = p->ImagePixels[y].size();
+                                int number = y * w + x;
+
+                                if (p->g_number == "CASUAL") {
+                                    number = y * w + x + 1;
+                                }
+
+                                if (p->g_numbering) {
+                                    std::string text = std::to_string(number);
+                                    DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, p->fontNumber, textColor);
+                                }
+
+
+                            }
+                        }
+
+                    }
+
+
+                }
+
+                Rectangle FooterSection{
+                    PanelOutputImage.x,
+                    PanelOutputImage.y + PanelOutputImage.height + spacing,
+                    PanelOutputImage.width,
+                    MainRightSection.height - PanelOutputImage.height - spacing
+                };
+                //DrawRectangleLinesEx(FooterSection, 0.5F, WHITE);
+                DrawRectangleRounded(FooterSection, 0.3F, 10, p->ColorPanel);
+
+                // FooterSection
+                {
+                    // DATE
+
+
+                    // EXPORT BUTTON
+                    {
+                        float buttonW{ FooterSection.width * 0.09F };
+                        float pad = 5;
+                        Rectangle buttonExport{
+                            FooterSection.x + FooterSection.width - ((FooterSection.width + buttonW) / 2),
+                            FooterSection.y + FooterSection.height - ((FooterSection.height + FooterSection.height) / 2) + (pad * 1),
+                            buttonW,
+                            FooterSection.height - (pad * 2)
+                        };
+                        static bool isHover = false;
+                        Color color = { 52, 148,65, 255 };
+
+                        if (CheckCollisionPointRec(p->mousePosition, buttonExport)) {
+                            isHover = true;
+                            color = color;
+
+                            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                p->g_exporting = true;
+
+                            }
                         }
                         else {
-                            float h = panel_input_image_base.height;
-                            float w = imageNewSize.w / imageNewSize.h * panel_input_image_base.height;
-                            p->flexible_panel_input = {
-                                panel_input_image_base.x + (panel_input_image_base.width - w) / 2,
-                                panel_input_image_base.y + (panel_input_image_base.height - h) / 2,
-                                w,
-                                h
-                            };
+                            color = { 42, 128,55, 255 };
                         }
+
+                        DrawRectangleRounded(buttonExport, 0.3F, 10, color);
+
+                        std::string text{ "EXPORT" };
+                        DrawTextCustom(buttonExport, text, CENTER, 0.9F, 1.0F, p->fontGeneral, WHITE);
                     }
-                    // I dont know why jpg doesnt work.
-                    else if (IsFileExtension(c_file_path, "jpg") || IsFileExtension(c_file_path, "jpeg")) {
 
-                    }
+                    // MADE BY UFTHaq
+                    std::string text = "Created on Aug 2024 by UFTHaq";
+                    DrawTextCustom(FooterSection, text, RIGHT, 0.7F, 0.0F, p->fontGeneral, WHITE);
+                    
 
-                    p->reload_setup = true;
-
-                    UnloadDroppedFiles(dropped_file);
                 }
-
-                if (p->reload_setup) {
-                    LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
-                    p->reload_setup = false;
-                }
-
-                if (p->texture_input.height != 0) {
-                    // Draw input
-                    {
-                        Rectangle source{
-                            0,0,(float)p->texture_input.width, (float)p->texture_input.height
-                        };
-                        Rectangle dest{ p->flexible_panel_input };
-                        DrawTexturePro(p->texture_input, source, dest, { 0,0 }, 0, WHITE);
-                    }
-                }
-
-                DrawRectangleLinesEx(p->flexible_panel_input, 0.5F, WHITE);
-
-                if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S)) {
-                    ExportImage(p->ImageOutput, "output.png");
-                }
-
             }
-
-            // SECTION 1 RIGHT
-            {
-                float name_space = p->LabelSize;
-                Rectangle panel_output_image_base{
-                    rect_r.x,
-                    rect_r.y,
-                    rect_r.width,
-                    rect_r.height - name_space
-                };
-                DrawRectangleLinesEx(panel_output_image_base, 0.5F, WHITE);
-
-                Rectangle panel_output_image_name{
-                    panel_output_image_base.x,
-                    panel_output_image_base.y + panel_output_image_base.height,
-                    panel_output_image_base.width,
-                    name_space
-                };
-                DrawRectangleLinesEx(panel_output_image_name, 0.5F, WHITE);
-
-                {
-                    // INPUT IMAGE TEXT
-                    std::string text = "OUTPUT IMAGE";
-                    DrawTextCustom(panel_output_image_name, text, CENTER, 0.9F, 1.0F, WHITE);
-                }
-
-                p->flexible_panel_output = {
-                    panel_output_image_base.x + (panel_output_image_base.width - p->flexible_panel_input.width) / 2,
-                    p->flexible_panel_input.y,
-                    p->flexible_panel_input.width,
-                    p->flexible_panel_input.height
-                };
-
-                p->flexible_panel_crop = {
-                    p->flexible_panel_output.x,
-                    p->flexible_panel_output.y,
-                    p->flexible_panel_output.width + 1,
-                    p->flexible_panel_output.height + 1,
-                };
-
-                if (p->texture_input.height != 0) {
-                    // Draw output
-                    {
-                        Rectangle source{
-                            0,0,(float)p->texture_output.width, (float)p->texture_output.height
-                        };
-                        Rectangle dest{ p->flexible_panel_output };
-                        //DrawTexturePro(p->texture_output, source, dest, { 0,0 }, 0, WHITE);
-                    }
-                }
-
-                DrawRectangleLinesEx(p->flexible_panel_output, 0.5F, WHITE);
-
-                float pad = 2;
-                Rectangle pixelDrawArea = {
-                    p->flexible_panel_output.x + (pad * 1),
-                    p->flexible_panel_output.y + (pad * 1),
-                    p->flexible_panel_output.width - (pad * 2),
-                    p->flexible_panel_output.height - (pad * 2),
-                };
-
-                if (p->texture_input.height != 0) {
-
-                    float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
-                    float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
-
-                    Rectangle tiles{};
-                    for (size_t y = 0; y < p->ImagePixels.size(); y++) {
-                        for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
-                            tiles = {
-                                pixelDrawArea.x + (x * tiles_w),
-                                pixelDrawArea.y + (y * tiles_h),
-                                tiles_w,
-                                tiles_h
-                            };
-
-                            float pad = 0.75F;
-                            Rectangle pixel = {
-                                tiles.x + (pad * 1),
-                                tiles.y + (pad * 1),
-                                tiles.width - (pad * 2),
-                                tiles.height - (pad * 2),
-                            };
-
-                            Color colorTile = p->ImagePixels[y][x];
-                            DrawRectangleRec(pixel, colorTile);
-                            //DrawRectangleRounded(pixel, 0.6F, 10, colorTile);
-
-                            float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
-
-                            //Color textColor = (luminance > 140) ? BLACK : WHITE;
-                            Color textColor = (luminance > 128) ? BLACK : WHITE;
-
-                            int w = p->ImagePixels[y].size();
-                            int number = y * w + x;
-
-                            std::string text = std::to_string(number);
-                            DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, textColor);
-                            
-                        }
-                    }
-
-                }
-
-            }
-
         }
-
-
-
     }
 
 
+}
+
+void InputTextBox(Rectangle& inputTitleBase)
+{
+    // INPUT BOX
+    static bool inputBoxActive = false;
+    static int framesCounter = 0;
+    int maxInputChars = 12;
+
+    if (CheckCollisionPointRec(p->mousePosition, inputTitleBase)) {
+        SetMouseCursor(MOUSE_CURSOR_IBEAM);
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            inputBoxActive = true;
+        }
+
+    }
+    else { SetMouseCursor(MOUSE_CURSOR_DEFAULT); }
+
+    if (!CheckCollisionPointRec(p->mousePosition, inputTitleBase)) {
+        if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            inputBoxActive = false;
+        }
+    }
+
+    size_t letterSize = p->g_inputTitle.size();
+    if (inputBoxActive) {
+
+        framesCounter++;
+
+        int key = GetKeyPressed();
+
+        while (key > 0) {
+            // Input small letters, numbers, and underscore
+            if (((key >= 'A') && (key <= 'Z')) || ((key >= '0') && (key <= '9')) || (key == '_')) {
+                if (letterSize < maxInputChars) {
+                    p->g_inputTitle += static_cast<char>(key); // Directly append the character
+                }
+            }
+
+            key = GetKeyPressed();
+        }
+
+
+        // Backspace delete chars
+        if (IsKeyPressed(KEY_BACKSPACE) && !p->g_inputTitle.empty()) {
+            p->g_inputTitle.pop_back();
+        }
+        else if (IsKeyDown(KEY_BACKSPACE) && !p->g_inputTitle.empty()) {
+            static int timeDown_Backspace = 0;
+            timeDown_Backspace++;
+            if (((timeDown_Backspace) % 15) == 0) p->g_inputTitle.pop_back();
+        }
+    }
+    else framesCounter = 0;
+
+    if (inputBoxActive) {
+        if (((framesCounter / 30) % 2) == 0) {
+            // BLINKING CURSOR
+            const char* text = "|";
+            float fontSize = inputTitleBase.height * 0.8F;
+            float fontSpace = 0.0F;
+            Vector2 text_measure = MeasureTextEx(p->fontGeneral, p->g_inputTitle.c_str(), fontSize, fontSpace);
+            Vector2 text_coor = {
+                inputTitleBase.x + (text_measure.x * 1.1F) + inputTitleBase.height * 0.3F,
+                inputTitleBase.y + ((inputTitleBase.height - text_measure.y) / 2) - 0
+            };
+            DrawTextEx(p->fontGeneral, text, text_coor, fontSize, fontSpace, BLACK);
+        }
+    }
+
+    {
+        std::string text{};
+        if (p->g_inputTitle.empty() && !inputBoxActive) {
+            text = "Click Here";
+        }
+        else {
+            text = p->g_inputTitle;
+        }
+        //DrawTextMine(inputTitleBase, text, LEFT, 0.8F, BLACK, BLANK);
+        //DrawTextEx(p->fontGeneral, text, text_coor, fontSize, fontSpace, BLACK);
+        DrawTextCustom(inputTitleBase, text, LEFT, 0.8F, 1.0F, BLACK);
+    }
+}
+
+Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight)
+{
+    Rectangle flexibleRect{};
+    float baseRatio{ BaseRect.width / BaseRect.height };
+    float objectRatio{ ObjectWidth / ObjectHeight };
+
+    if (ObjectWidth == ObjectHeight) {
+        if (BaseRect.height < BaseRect.width) {
+            float h = BaseRect.height;
+            float w = h;
+            flexibleRect = {
+                BaseRect.x + (BaseRect.width - w) / 2,
+                BaseRect.y + (BaseRect.height - w) / 2,
+                w,
+                h
+            };
+        }
+        else {
+            float w = BaseRect.width;
+            float h = w;
+            flexibleRect = {
+                BaseRect.x + (BaseRect.width - w) / 2,
+                BaseRect.y + (BaseRect.height - w) / 2,
+                w,
+                h
+            };
+        }
+
+    }
+    else if (ObjectWidth > ObjectHeight) {
+
+        float w = BaseRect.width;
+        float h = ObjectHeight / ObjectWidth * BaseRect.width;
+        flexibleRect = {
+            BaseRect.x + (BaseRect.width - w) / 2,
+            BaseRect.y + (BaseRect.height - h) / 2,
+            w,
+            h
+        };
+        objectRatio =  flexibleRect.width / flexibleRect.height;
+
+        if (objectRatio < baseRatio) {
+            float h = BaseRect.height;
+            float w = ObjectWidth / ObjectHeight * BaseRect.height;
+            flexibleRect = {
+                BaseRect.x + (BaseRect.width - w) / 2,
+                BaseRect.y + (BaseRect.height - h) / 2,
+                w,
+                h
+            };
+        }
+
+
+    }
+    else {
+        float h = BaseRect.height;
+        float w = ObjectWidth / ObjectHeight * BaseRect.height;
+        flexibleRect = {
+            BaseRect.x + (BaseRect.width - w) / 2,
+            BaseRect.y + (BaseRect.height - h) / 2,
+            w,
+            h
+        };
+        objectRatio = flexibleRect.width / flexibleRect.height;
+
+        if (objectRatio > baseRatio) {
+            float w = BaseRect.width;
+            float h = ObjectHeight / ObjectWidth * BaseRect.width;
+            flexibleRect = {
+                BaseRect.x + (BaseRect.width - w) / 2,
+                BaseRect.y + (BaseRect.height - h) / 2,
+                w,
+                h
+            };
+            objectRatio = flexibleRect.width / flexibleRect.height;
+        }
+    }
+
+    return flexibleRect;
 }
 
 void LoadSetup(int new_width, int new_height)
@@ -465,25 +1253,19 @@ void LoadSetup(int new_width, int new_height)
     // TODO: Resizing
     if (p->reload_setup)
     {
-        int pixelate_range = 25;
+        int pixelate_range = p->g_pixelatedRange;
         int new_heightSize = (p->ImageInput.height) / pixelate_range;
         int new_widthSize = int((float(new_heightSize) / new_height) * new_width);
 
+        UnloadTexture(p->texture_input);
         p->texture_input = LoadTextureFromImage(p->ImageInput);
 
         Image image_process = ImageCopy(p->ImageInput);
+        UnloadImage(p->ImageOutput);
 
         p->ImageOutput = ImageCopy(image_process);
+        UnloadImage(image_process);
 
-        // TODO:
-        // Pixelation will use rectangle and padding
-        // Steps:
-        // 1. Make image small to the wanted pixel size. and store the image matrix size.
-        // 2. Take data color  from it, put in vector.
-        // 3. Make vector matrix Color.
-        // 4. Make the matrix rectangle in output rectangle.
-        // 5. ez pz.
-        //
 
         // Make it Smaller
         ImageResizeNN(&p->ImageOutput, new_widthSize, new_heightSize);
@@ -519,16 +1301,18 @@ void LoadSetup(int new_width, int new_height)
 
     }
 
+    UnloadTexture(p->texture_output);
     //ImageFormat(&p->ImageOutput, PIXELFORMAT_UNCOMPRESSED_GRAYSCALE);
     p->texture_output = LoadTextureFromImage(p->ImageOutput);
 }
 
-void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, float space, const Color color)
+void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Color color)
 {
     float font_size = panel.height * size;
     float font_space = space;
-    Vector2 text_measure = MeasureTextEx(p->font, text.c_str(), font_size, font_space);
+    Vector2 text_measure = MeasureTextEx(p->fontGeneral, text.c_str(), font_size, font_space);
     Vector2 text_coor{};
+    float margin = 0.25F;
     if (align == CENTER) {
         text_coor = {
             panel.x + (panel.width - text_measure.x) / 2,
@@ -537,13 +1321,13 @@ void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, 
     }
     else if (align == LEFT) {
         text_coor = {
-            panel.x + panel.height * 0.3F,
+            panel.x + panel.height * margin,
             panel.y + (panel.height - text_measure.y) / 2
         };
     }
     else if (align == RIGHT) {
         text_coor = {
-            panel.x + panel.width - (text_measure.x + panel.height * 0.3F),
+            panel.x + panel.width - (text_measure.x + panel.height * margin),
             panel.y + (panel.height - text_measure.y) / 2
         };
     }
@@ -553,13 +1337,50 @@ void DrawTextCustom(Rectangle& panel, std::string& text, int align, float size, 
         text_measure.x + (panel.height * 0.3F * 2),
         panel.height
     };
-    DrawTextEx(p->font, text.c_str(), text_coor, font_size, font_space, color);
+    DrawTextEx(p->fontGeneral, text.c_str(), text_coor, font_size, font_space, color);
+}
+
+void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color)
+{
+    float font_size = panel.height * size;
+    float font_space = space;
+    Vector2 text_measure = MeasureTextEx(p->fontGeneral, text.c_str(), font_size, font_space);
+    Vector2 text_coor{};
+    float margin = 0.25F;
+    if (align == CENTER) {
+        text_coor = {
+            panel.x + (panel.width - text_measure.x) / 2,
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+    else if (align == LEFT) {
+        text_coor = {
+            panel.x + panel.height * margin,
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+    else if (align == RIGHT) {
+        text_coor = {
+            panel.x + panel.width - (text_measure.x + panel.height * margin),
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+    Rectangle fillRect = {
+        panel.x,
+        panel.y,
+        text_measure.x + (panel.height * 0.3F * 2),
+        panel.height
+    };
+    DrawTextEx(font, text.c_str(), text_coor, font_size, font_space, color);
 }
 
 void InitializedFont(void)
 {
-    p->font = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 40, 0, 0);
-    SetTextureFilter(p->font.texture, TEXTURE_FILTER_BILINEAR);
+    p->fontGeneral = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 50, 0, 0);
+    SetTextureFilter(p->fontGeneral.texture, TEXTURE_FILTER_BILINEAR);
+
+    p->fontNumber = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 35, 0, 0);
+    SetTextureFilter(p->fontNumber.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 void InitializedIcons(void)
