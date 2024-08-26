@@ -5,6 +5,7 @@
 //
 
 #include <iostream>
+#include <filesystem>
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -163,8 +164,8 @@ struct SliderInput {
 };
 
 enum Numbering {
-    OFF,
-    ON,
+    OFF_NUMBERING,
+    ON_NUMBERING,
 };
 
 struct ButtonNumbering {
@@ -188,7 +189,7 @@ struct ButtonNumbering {
     }
 
     std::string getTextDisplay() {
-        if (isNumbering == ON) return textDisplay = "ON";
+        if (isNumbering == ON_NUMBERING) return textDisplay = "ON";
         else return textDisplay = "OFF";
     }
 
@@ -280,6 +281,13 @@ struct ButtonExportFormat {
     }
 };
 
+enum Notification {
+    OFF_NOTIFICATION = 0,
+    SUCCESS_EXPORT,
+    ERROR_EXPORT,
+    WARNING_TITLE_EMPTY
+};
+
 struct Plug {
     std::string AppTitle{ "ZEN PIXEL" };
     RectSize Screen{};
@@ -306,7 +314,7 @@ struct Plug {
     ImageSize flexibleSize{};
     std::vector<std::vector<Color>> ImagePixels{};
     std::vector<std::string> setupParameter{ "NUMBERING", "NUMBER", "SPACE", "CORNER", "PIXEL RANGE", "TITLE", "FORMAT" };
-    std::vector<ButtonNumbering> argumentNumbering{ {ON, 1}, {OFF, 0} };
+    std::vector<ButtonNumbering> argumentNumbering{ {OFF_NUMBERING, 1}, {ON_NUMBERING, 0}, };
     std::vector<ButtonNumber> argumentNumber{ {"CASUAL", 0}, {"INDEX", 1} };
     std::vector<ButtonExportFormat> argumentFormat{ {"PNG", 1}, {"JPG", 0} };
 
@@ -314,12 +322,15 @@ struct Plug {
     std::string g_number{};
     std::string g_title{};
     std::string g_format{};
-    int g_pixelatedRange{10};
-    int g_corner{};
-    int g_space{};
+    int g_pixelatedRange{25};
+    int g_corner{3};
+    int g_space{2};
     std::string g_inputTitle{};
 
-    bool g_exporting{};
+    bool g_exporting{false};
+    std::string g_folderPath{ "Output/" };
+    std::string g_exportPath{};
+    int notification{OFF_NOTIFICATION};
 };
 
 Plug ZenPlug{};
@@ -340,7 +351,10 @@ void UpdateDraw();
 void InputTextBox(Rectangle& inputTitleBase);
 
 Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
+void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor);
 void Exporting();
+
+void OutputFolderTest();
 
 int main()
 {
@@ -355,6 +369,8 @@ int main()
     InitializedFont();
     InitializedIcons();
 
+    OutputFolderTest();
+
     while (!WindowShouldClose())
     {
         BeginDrawing();
@@ -364,45 +380,52 @@ int main()
 
         EndDrawing();
 
-        Exporting();
-
         if (p->g_exporting) {
             Exporting();
-        }
-
-        if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyDown(KEY_S) && IsKeyPressed(KEY_C)) {
-            Image SS = LoadImageFromScreen();
-            ExportImage(SS, "SS.png");
-
-            // BUG Notice Untuk Ratio 3:2 seperti 600:400 dll, Failed to Export.
-            // Tambahan bahwa ratio yang semakin dekat Area juga Failed to Export.
-            //
-            ImageCrop(&SS, p->flexible_panel_crop); 
-            ExportImage(SS, "SS-normal.png");
-
-            Image SS_resize = ImageCopy(SS);
-            ImageResize(&SS_resize, int(p->flexible_panel_crop.width * 2), int(p->flexible_panel_crop.height * 2));
-            ExportImage(SS_resize, "SS_resize.png");
-
-            Image SS_resizeNN = ImageCopy(SS);
-            ImageResize(&SS_resizeNN, int(p->flexible_panel_crop.width * 2), int(p->flexible_panel_crop.height * 2));
-            ExportImage(SS_resizeNN, "SS_resizeNN.png");
-            ExportImage(SS_resizeNN, "SS_resizeNN.jpg");
         }
     }
     CloseWindow();
 }
 
+void OutputFolderTest()
+{
+    std::string outputPath{ p->g_folderPath };
+    if (std::filesystem::exists(outputPath) && std::filesystem::is_directory(outputPath)) {
+        std::string info{ "[Passed] : Output Directory Exists" };
+        TraceLog(LOG_INFO, info.c_str());
+    }
+    else {
+        std::string info{ "[Failed] : Output Directory NOT Exists" };
+        TraceLog(LOG_WARNING, info.c_str());
+
+        std::filesystem::create_directory(outputPath);
+
+        info = "Creating " + outputPath + " Directory";
+        TraceLog(LOG_INFO, info.c_str());
+        if (std::filesystem::exists(outputPath) && std::filesystem::is_directory(outputPath)) {
+            std::string info{ "[Passed] : Output Directory Exists" };
+            TraceLog(LOG_INFO, info.c_str());
+        }
+    }
+}
+
 void Exporting() {
     if (!p->g_inputTitle.empty()) {
         // Process Export and Notification Success
+        std::string title = p->g_exportPath;
 
         if (p->g_format == ".png") {
             Image SS = LoadImageFromScreen();
-            std::string title = p->g_inputTitle + p->g_format;
 
             ImageCrop(&SS, p->flexible_panel_crop);
-            ExportImage(SS, title.c_str());
+            if (ExportImage(SS, title.c_str())) {
+                p->notification = SUCCESS_EXPORT;
+            }
+            else {
+                p->notification = ERROR_EXPORT;
+            }
+
+            UnloadImage(SS);
 
         }
         else if (p->g_format == ".jpg") {
@@ -436,16 +459,16 @@ void Exporting() {
                 sf::Image imageSFML{};
                 imageSFML.create(w, h, pixelData.data());
 
-                std::string title = p->g_inputTitle + p->g_format;
-
                 // SAVE IMAGE JPG
                 if (imageSFML.saveToFile(title)) {
                     std::string log = "FILEIO: [" + title + "] File exported succesfully";
                     TraceLog(LOG_INFO, log.c_str());
+                    p->notification = SUCCESS_EXPORT;
                 }
                 else {
                     std::string log = "FILEIO: [" + title + "] File exporting failed";
                     TraceLog(LOG_ERROR, log.c_str());
+                    p->notification = ERROR_EXPORT;
                 }
 
                 UnloadImageColors(colorPointer);
@@ -454,7 +477,7 @@ void Exporting() {
         }
     }
     else {
-        // Notification Failed
+        p->notification = WARNING_TITLE_EMPTY;
     }
 
     p->g_exporting = false;
@@ -796,7 +819,7 @@ void UpdateDraw()
                             }
                             else if (p->setupParameter.at(i) == "SPACE") {
 
-                                static SliderInput SliderSpace{ argument, 2, -5, 5, false };
+                                static SliderInput SliderSpace{ argument, (float)p->g_space, -5, 5, false };
                                 SliderSpace.Run();
 
                                 if (CheckCollisionPointRec(p->mousePosition, argument)) {
@@ -816,11 +839,11 @@ void UpdateDraw()
                             }
                             else if (p->setupParameter.at(i) == "CORNER") {
 
-                                static SliderInput SliderSpace{ argument, 5, 0, 10, false };
-                                SliderSpace.Run();
+                                static SliderInput SliderCorner{ argument, (float)p->g_corner, 0, 10, false };
+                                SliderCorner.Run();
 
                                 if (CheckCollisionPointRec(p->mousePosition, argument)) {
-                                    int newVal = (int)SliderSpace.GetValue();
+                                    int newVal = (int)SliderCorner.GetValue();
                                     static int oldVal = newVal;
 
                                     if (newVal != oldVal) {
@@ -836,11 +859,11 @@ void UpdateDraw()
                             }
                             else if (p->setupParameter.at(i) == "PIXEL RANGE") {
 
-                                static SliderInput SliderSpace{ argument, 20, 4, 40, false };
-                                SliderSpace.Run();
+                                static SliderInput SliderPixel{ argument, (float)p->g_pixelatedRange, 3, 60, false };
+                                SliderPixel.Run();
 
                                 if (CheckCollisionPointRec(p->mousePosition, argument)) {
-                                    int newVal = (int)SliderSpace.GetValue();
+                                    int newVal = (int)SliderPixel.GetValue();
                                     static int oldVal = newVal;
 
                                     if (newVal != oldVal) {
@@ -946,8 +969,8 @@ void UpdateDraw()
                     p->flexible_panel_crop = {
                         p->flexible_panel_output.x,
                         p->flexible_panel_output.y,
-                        p->flexible_panel_output.width + 1,
-                        p->flexible_panel_output.height + 1,
+                        p->flexible_panel_output.width + 0,
+                        p->flexible_panel_output.height + 0,
                     };
 
                     if (p->texture_input.height != 0) {
@@ -1037,7 +1060,32 @@ void UpdateDraw()
 
                 // FooterSection
                 {
-                    // DATE
+                    // NOTIFICATION
+                    {
+                        std::string text{};
+                        if (p->notification != OFF_NOTIFICATION) {
+                            static float time = 0.0F;
+                            time += GetFrameTime();
+
+                            if (p->notification == SUCCESS_EXPORT) {
+                                text = "SUCCESS EXPORT TO " + p->g_exportPath;
+                                DrawNotification(FooterSection, text, LEFT, 0.55F, 1.0, WHITE, DARKBLUE);
+                            }
+                            else if (p->notification == ERROR_EXPORT) {
+                                text = "FAILED TO EXPORT " + p->g_exportPath;
+                                DrawNotification(FooterSection, text, LEFT, 0.55F, 1.0, WHITE, RED);
+                            }
+                            else if (p->notification == WARNING_TITLE_EMPTY) {
+                                text = "PLEASE FILL EXPORT TITLE";
+                                DrawNotification(FooterSection, text, LEFT, 0.55F, 1.0, WHITE, RED);
+                            }
+
+                            if (time > 5.0F) {
+                                p->notification = OFF_NOTIFICATION;
+                                time = 0.0F;
+                            }
+                        }
+                    }
 
 
                     // EXPORT BUTTON
@@ -1058,8 +1106,8 @@ void UpdateDraw()
                             color = color;
 
                             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                p->g_exportPath = p->g_folderPath + p->g_inputTitle + p->g_format;
                                 p->g_exporting = true;
-
                             }
                         }
                         else {
@@ -1331,16 +1379,40 @@ void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, f
             panel.y + (panel.height - text_measure.y) / 2
         };
     }
-    Rectangle fillRect = {
-        panel.x,
-        panel.y,
-        text_measure.x + (panel.height * 0.3F * 2),
-        panel.height
-    };
+
     DrawTextEx(p->fontGeneral, text.c_str(), text_coor, font_size, font_space, color);
 }
 
 void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color)
+{
+    float font_size = panel.height * size;
+    float font_space = space;
+    Vector2 text_measure = MeasureTextEx(p->fontGeneral, text.c_str(), font_size, font_space);
+    Vector2 text_coor{};
+    float margin = 0.25F;
+    if (align == CENTER) {
+        text_coor = {
+            panel.x + (panel.width - text_measure.x) / 2,
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+    else if (align == LEFT) {
+        text_coor = {
+            panel.x + panel.height * margin,
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+    else if (align == RIGHT) {
+        text_coor = {
+            panel.x + panel.width - (text_measure.x + panel.height * margin),
+            panel.y + (panel.height - text_measure.y) / 2
+        };
+    }
+
+    DrawTextEx(font, text.c_str(), text_coor, font_size, font_space, color);
+}
+
+void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor)
 {
     float font_size = panel.height * size;
     float font_space = space;
@@ -1371,7 +1443,8 @@ void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, f
         text_measure.x + (panel.height * 0.3F * 2),
         panel.height
     };
-    DrawTextEx(font, text.c_str(), text_coor, font_size, font_space, color);
+    DrawRectangleRounded(fillRect, 0.2F, 10, fillColor);
+    DrawTextEx(p->fontGeneral, text.c_str(), text_coor, font_size, font_space, color);
 }
 
 void InitializedFont(void)
