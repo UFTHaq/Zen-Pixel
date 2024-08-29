@@ -12,6 +12,7 @@
 #include <cctype>
 
 #include <raylib.h>
+#include <rlgl.h>
 #include <SFML/Graphics.hpp>
 #include "ZenPixel.h"
 
@@ -331,6 +332,9 @@ struct Plug {
     std::string g_folderPath{ "Output/" };
     std::string g_exportPath{};
     int notification{OFF_NOTIFICATION};
+    bool closeThisApp{ false };
+
+    Shader shaderRoundedRect{};
 };
 
 Plug ZenPlug{};
@@ -347,6 +351,7 @@ void InitializedIcons(void);
 void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
+ImageSize CalculateFlexibleImage();
 
 void InputTextBox(Rectangle& inputTitleBase);
 
@@ -357,6 +362,7 @@ void Exporting();
 void OutputFolderTest();
 
 int main()
+//int WinMain()
 {
     SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN);
     //SetConfigFlags(FLAG_WINDOW_TOPMOST);
@@ -366,10 +372,11 @@ int main()
     InitWindow(p->Screen.w, p->Screen.h, p->AppTitle.c_str());
     SetTargetFPS(60);
 
+    OutputFolderTest();
     InitializedFont();
     InitializedIcons();
 
-    OutputFolderTest();
+    p->shaderRoundedRect = LoadShader(NULL, "resources/Shaders/rounded.fs");
 
     while (!WindowShouldClose())
     {
@@ -377,14 +384,20 @@ int main()
         ClearBackground(p->ColorLayer1);
 
         UpdateDraw();
+        DrawFPS(60, 21);
 
         EndDrawing();
+
 
         if (p->g_exporting) {
             Exporting();
         }
+
+        if (p->closeThisApp) break;
     }
     CloseWindow();
+
+    UnloadShader(p->shaderRoundedRect);
 }
 
 void OutputFolderTest()
@@ -547,7 +560,8 @@ void UpdateDraw()
                 color = RED;
                 if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 {
-                    CloseWindow();
+                    p->closeThisApp = true;
+                    //CloseWindow(); // LAMBAT KARENA TIDAK CLOSE WINDOW DI AKHIR END DRAWING.
                 }
             }
             else {
@@ -607,7 +621,7 @@ void UpdateDraw()
                     if (p->texture_input.height == 0) 
                     {
                         std::string text{ "DRAG DROP YOUR IMAGE" };
-                        DrawTextCustom(PanelInputImage, text, CENTER, 0.06F, 1.0F, p->fontGeneral, WHITE);
+                        DrawTextCustom(PanelInputImage, text, CENTER, 0.07F, 1.0F, p->fontGeneral, WHITE);
                     }
 
                     // DRAGDROP HANDLER
@@ -620,21 +634,103 @@ void UpdateDraw()
                         if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
                         {
                             p->ImageInput = LoadImage(c_file_path);
-                            ImageSize imageOldSize = { (float)p->ImageInput.width, (float)p->ImageInput.height };
-
-                            //int new_height = 40;
-                            int new_height = p->ImageInput.height;
-                            int new_width = int((float(new_height) / imageOldSize.h) * imageOldSize.w);
-                            std::cout << "height: " << new_height << "\nwidth: " << new_width << std::endl;
-                            ImageSize imageNewSize = { (float)new_width, (float)new_height };
-                            p->flexibleSize = imageNewSize;
-
-                            p->flexible_panel_input = FlexibleRectangle(PanelInputImage, imageNewSize.w, imageNewSize.h);
+                            p->flexibleSize = CalculateFlexibleImage();
+                            p->flexible_panel_input = FlexibleRectangle(PanelInputImage, p->flexibleSize.w, p->flexibleSize.h);
 
                         }
                         // I dont know why jpg doesnt work.
-                        else if (IsFileExtension(c_file_path, "jpg") || IsFileExtension(c_file_path, "jpeg")) {
+                        else if (IsFileExtension(c_file_path, ".jpg") || IsFileExtension(c_file_path, ".jpeg")) {
 
+                            // LOAD JPG USING SFML
+                            sf::Image sfmlImage{};
+                            if (sfmlImage.loadFromFile(cpp_file_path)) {
+                                TraceLog(LOG_INFO, "Success load image from SFML");
+
+                                if (0)
+                                {
+                                    // USING POINTER COLOR DOESNT WORK. ;[
+                                    // SO WE WILL USE ANOTHER WAY.
+                                    sf::Vector2u sfmlImageSize = sfmlImage.getSize();
+                                    int w = sfmlImageSize.x;
+                                    int h = sfmlImageSize.y;
+
+                                    // Color Pointer
+                                    const sf::Uint8* sfmlColorPtr = sfmlImage.getPixelsPtr();
+                                    std::cout << "PASS STEP 1" << std::endl;
+
+                                    //std::vector<unsigned char> ColorVectors{};
+                                    //std::vector<uint8_t> ColorVectors{};
+                                    //ColorVectors.reserve(w * h * 4);
+                                    //for (size_t i = 0; i < h * w * 4; i++) {
+                                    //    ColorVectors.push_back(sfmlColorPtr[i]);
+                                    //}
+                                    //std::cout << ColorVectors.size() << std::endl;
+
+                                    ////ColorVectors.assign(sfmlColorPtr, sfmlColorPtr + w * h * 4);
+                                    //std::cout << ColorVectors.size() << std::endl;
+                                    //std::cout << "PASS STEP 2" << std::endl;
+
+                                    // Load Image Input from Pointer Colors
+                                    /*Image raylibImage = {
+                                        ColorVectors.data(),
+                                        w,
+                                        h,
+                                        1,
+                                        PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+                                    };*/
+
+                                    std::vector<Color> colorVectors{};
+                                    colorVectors.reserve(w * h);
+                                    for (size_t i = 0; i < w * h; i++) {
+                                        Color color = {
+                                            sfmlColorPtr[i * 4 + 0], // r
+                                            sfmlColorPtr[i * 4 + 1], // g
+                                            sfmlColorPtr[i * 4 + 2], // b
+                                            sfmlColorPtr[i * 4 + 3], // a
+                                        };
+                                        colorVectors.push_back(color);
+                                    }
+
+                                    //Image raylibImage = {
+                                    //    colorVectors.data(),
+                                    //    w,
+                                    //    h,
+                                    //    1,
+                                    //    PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+                                    //};
+
+                                    //p->ImageInput = raylibImage;
+
+                                    p->ImageInput = {
+                                        colorVectors.data(),
+                                        w,
+                                        h,
+                                        1,
+                                        PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+                                    };
+                                }
+
+                                if (1)
+                                {
+                                    // Save sfmlLmage to disk in png.
+                                    std::string temporaryImage{ "temporary.png" };
+                                    sfmlImage.saveToFile(temporaryImage);
+
+                                    UnloadImage(p->ImageInput);
+                                    p->ImageInput = LoadImage(temporaryImage.c_str());
+                                    p->flexibleSize = CalculateFlexibleImage();
+                                    p->flexible_panel_input = FlexibleRectangle(PanelInputImage, p->flexibleSize.w, p->flexibleSize.h);
+
+                                    std::filesystem::remove(temporaryImage);
+                                }
+
+
+                            }
+                            else {
+                                TraceLog(LOG_WARNING, "Failed load image from SFML");
+                            }
+
+                            
                         }
 
                         p->reload_setup = true;
@@ -964,29 +1060,12 @@ void UpdateDraw()
                 {
                     p->flexible_panel_output = FlexibleRectangle(PanelOutputImage, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
-                    //p->flexible_panel_output = {
-
                     p->flexible_panel_crop = {
                         p->flexible_panel_output.x,
                         p->flexible_panel_output.y,
                         p->flexible_panel_output.width + 0,
                         p->flexible_panel_output.height + 0,
                     };
-
-                    if (p->texture_input.height != 0) {
-                        // Draw output
-                        {
-                            Rectangle source{
-                                0,0,(float)p->texture_output.width, (float)p->texture_output.height
-                            };
-                            Rectangle dest{ p->flexible_panel_output };
-                            //DrawTexturePro(p->texture_output, source, dest, { 0,0 }, 0, WHITE);
-                        }
-                        
-                        //DrawRectangleLinesEx(p->flexible_panel_output, 0.5F, WHITE);
-                        DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
-                    }
-
 
                     float pad = 2;
                     Rectangle pixelDrawArea = {
@@ -997,9 +1076,16 @@ void UpdateDraw()
                     };
 
                     if (p->texture_input.height != 0) {
+                        // Draw output
 
                         float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
                         float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+                        
+                        DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
+
+                        // Draw Pixels
+                        // TODO : MAKE IT FAST. Too slow if the image size so big and the pixel range so small.
+                        // 1. Maybe calculate in and draw from GPU, but how?
 
                         Rectangle tiles{};
                         for (size_t y = 0; y < p->ImagePixels.size(); y++) {
@@ -1021,7 +1107,6 @@ void UpdateDraw()
                                 };
 
                                 Color colorTile = p->ImagePixels[y][x];
-                                //DrawRectangleRec(pixel, colorTile);
                                 DrawRectangleRounded(pixel, corner, 10, colorTile);
 
                                 float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
@@ -1044,7 +1129,10 @@ void UpdateDraw()
                             }
                         }
 
+                        EndShaderMode();
+
                     }
+
 
 
                 }
@@ -1131,6 +1219,18 @@ void UpdateDraw()
     }
 
 
+}
+
+ImageSize CalculateFlexibleImage()
+{
+    ImageSize imageOldSize = { (float)p->ImageInput.width, (float)p->ImageInput.height };
+
+    int new_height = p->ImageInput.height;
+    int new_width = int((float(new_height) / imageOldSize.h) * imageOldSize.w);
+    //std::cout << "height: " << new_height << "\nwidth: " << new_width << std::endl;
+    ImageSize imageNewSize = { (float)new_width, (float)new_height };
+
+    return imageNewSize;
 }
 
 void InputTextBox(Rectangle& inputTitleBase)
