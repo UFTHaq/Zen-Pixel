@@ -757,8 +757,8 @@ void UpdateDraw()
                     // DRAW INPUT TEXTURE
                     if (p->reload_setup) {
                         LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
-                        p->redrawTexture = true;
                         p->reload_setup = false;
+                        p->redrawTexture = true;
                     }
 
                     if (p->texture_input.height != 0) {
@@ -871,6 +871,7 @@ void UpdateDraw()
                                             }
                                             ObjectButtonNumbering.chooseThisButton();
                                             p->redrawTexture = true;
+                                            p->reload_setup = true;
                                         }
                                     }
                                     else {
@@ -916,6 +917,7 @@ void UpdateDraw()
                                             }
                                             ObjectButtonNumber.chooseThisButton();
                                             p->redrawTexture = true;
+                                            p->reload_setup = true;
                                         }
                                     }
                                     else {
@@ -934,7 +936,7 @@ void UpdateDraw()
                             }
                             else if (p->setupParameter.at(i) == "SPACE") {
 
-                                static SliderInput SliderSpace{ argument, (float)p->g_space, -5, 5, false };
+                                static SliderInput SliderSpace{ argument, (float)p->g_space, -5, 10, false };
                                 SliderSpace.Run();
 
                                 if (CheckCollisionPointRec(p->mousePosition, argument)) {
@@ -1082,6 +1084,7 @@ void UpdateDraw()
                 {
                     p->flexible_panel_output = FlexibleRectangle(PanelOutputImage, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
+
                     p->flexible_panel_crop = {
                         p->flexible_panel_output.x,
                         p->flexible_panel_output.y,
@@ -1105,6 +1108,15 @@ void UpdateDraw()
 
                     // NEW
                     if (p->texture_input.height != 0) {
+
+                        Rectangle newFlexible = pixelDrawArea;
+                        static Rectangle oldFlexible = newFlexible;
+
+                        if ((newFlexible.height != oldFlexible.height) || (newFlexible.width != oldFlexible.width)) {
+                            oldFlexible = newFlexible;
+                            p->reload_setup = true;
+                        }
+
                         Rectangle newPixelDrawArea = {
                             0,
                             0,
@@ -1268,7 +1280,10 @@ void UpdateDraw()
 void redrawRenderTexture(Rectangle& pixelDrawArea)
 {
     static bool firstSetup = true;
-    if (firstSetup) p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+    if (firstSetup) {
+        p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+        firstSetup = false;
+    }
 
     if (p->reload_setup) {
         if (p->renderTexture.texture.height != 0) {
@@ -1293,7 +1308,7 @@ void redrawRenderTexture(Rectangle& pixelDrawArea)
                 tiles_h
             };
 
-            float pad = p->g_space * 0.3F;
+            float pad = p->g_space * 0.5F;
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
                 tiles.x + (pad * 1),
@@ -1536,9 +1551,9 @@ void LoadSetup(int new_width, int new_height)
 
         std::cout << smallPixelData.size() << std::endl;
 
-        for (auto& i : smallPixelData) {
-            //std::cout << (uint16_t)i.r << " ";
-        }
+        //for (auto& i : smallPixelData) {
+        //    std::cout << (uint16_t)i.r << " ";
+        //}
 
         std::vector<std::vector<Color>> matrixSmallImage(h, std::vector<Color>(w));
 
@@ -1548,7 +1563,11 @@ void LoadSetup(int new_width, int new_height)
             }
         }
 
+        p->ImagePixels.clear();
         p->ImagePixels = matrixSmallImage;
+        p->ImagePixels.shrink_to_fit();
+        matrixSmallImage.clear();
+        matrixSmallImage.shrink_to_fit();
 
         // Make it Normal size Again
         ImageResizeNN(&p->ImageOutput, p->flexibleSize.w, p->flexibleSize.h);
