@@ -328,13 +328,15 @@ struct Plug {
     int g_space{2};
     std::string g_inputTitle{};
 
-    bool g_exporting{false};
+    bool g_exporting{ false };
     std::string g_folderPath{ "Output/" };
     std::string g_exportPath{};
     int notification{OFF_NOTIFICATION};
     bool closeThisApp{ false };
 
     Shader shaderRoundedRect{};
+    bool redrawTexture{ true };
+    RenderTexture2D renderTexture{};
 };
 
 Plug ZenPlug{};
@@ -351,6 +353,7 @@ void InitializedIcons(void);
 void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
+void redrawRenderTexture(Rectangle& pixelDrawArea);
 ImageSize CalculateFlexibleImage();
 
 void InputTextBox(Rectangle& inputTitleBase);
@@ -377,8 +380,6 @@ int main()
     InitializedFont();
     InitializedIcons();
 
-    p->shaderRoundedRect = LoadShader(NULL, "resources/Shaders/rounded.fs");
-
     while (!WindowShouldClose())
     {
         BeginDrawing();
@@ -398,7 +399,6 @@ int main()
     }
     CloseWindow();
 
-    UnloadShader(p->shaderRoundedRect);
 }
 
 void OutputFolderTest()
@@ -481,7 +481,7 @@ void ExportingHighResImage() {
 
                 if (p->g_numbering) {
                     std::string text = std::to_string(number);
-                    DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, p->fontNumber, textColor);
+                    DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
                 }
             }
         }
@@ -706,6 +706,7 @@ void UpdateDraw()
 
                         if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
                         {
+                            if (p->ImageInput.height != 0) UnloadImage(p->ImageInput);
                             p->ImageInput = LoadImage(c_file_path);
                             p->flexibleSize = CalculateFlexibleImage();
                             p->flexible_panel_input = FlexibleRectangle(PanelInputImage, p->flexibleSize.w, p->flexibleSize.h);
@@ -756,6 +757,7 @@ void UpdateDraw()
                     // DRAW INPUT TEXTURE
                     if (p->reload_setup) {
                         LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
+                        p->redrawTexture = true;
                         p->reload_setup = false;
                     }
 
@@ -868,6 +870,7 @@ void UpdateDraw()
                                                 button.resetChosen();
                                             }
                                             ObjectButtonNumbering.chooseThisButton();
+                                            p->redrawTexture = true;
                                         }
                                     }
                                     else {
@@ -912,6 +915,7 @@ void UpdateDraw()
                                                 button.resetChosen();
                                             }
                                             ObjectButtonNumber.chooseThisButton();
+                                            p->redrawTexture = true;
                                         }
                                     }
                                     else {
@@ -938,9 +942,10 @@ void UpdateDraw()
                                     static int oldVal = newVal;
 
                                     if (newVal != oldVal) {
-                                        p->reload_setup = true;
                                         p->g_space = newVal;
                                         oldVal = newVal;
+                                        p->reload_setup = true;
+                                        p->redrawTexture = true;
                                     }
                                     else {
                                         p->reload_setup = false;
@@ -958,9 +963,10 @@ void UpdateDraw()
                                     static int oldVal = newVal;
 
                                     if (newVal != oldVal) {
-                                        p->reload_setup = true;
                                         p->g_corner = newVal;
                                         oldVal = newVal;
+                                        p->reload_setup = true;
+                                        p->redrawTexture = true;
                                     }
                                     else {
                                         p->reload_setup = false;
@@ -978,9 +984,10 @@ void UpdateDraw()
                                     static int oldVal = newVal;
 
                                     if (newVal != oldVal) {
-                                        p->reload_setup = true;
                                         p->g_pixelatedRange = newVal;
                                         oldVal = newVal;
+                                        p->reload_setup = true;
+                                        p->redrawTexture = true;
                                     }
                                     else {
                                         p->reload_setup = false;
@@ -1090,18 +1097,41 @@ void UpdateDraw()
                         p->flexible_panel_output.height - (pad * 2),
                     };
 
-                    if (p->texture_input.height != 0) {
-                        // Draw output
+                    // Draw Pixels
+                    // TODO : MAKE IT FAST. Too slow if the image size so big and the pixel range so small.
+                    // 1. Maybe calculate in and draw from GPU, but how?
+                    // 2. Maybe batching with renderTexture and draw when the texture is complete?
 
+
+                    // NEW
+                    if (p->texture_input.height != 0) {
+                        Rectangle newPixelDrawArea = {
+                            0,
+                            0,
+                            pixelDrawArea.width * 1.5F,
+                            pixelDrawArea.height * 1.5F
+                        };
+
+                        if (p->redrawTexture) {
+                            redrawRenderTexture(newPixelDrawArea);
+                            p->redrawTexture = false;
+                        }
+
+                        Rectangle source{ 0,0,newPixelDrawArea.width, -newPixelDrawArea.height };
+                        Rectangle dest{ pixelDrawArea };
+                        DrawTexturePro(p->renderTexture.texture, source, dest, {0}, 0, WHITE);
+                    }
+
+                    // OLD
+                    if (0) {
+                    //if (p->texture_input.height != 0) {
+
+                        // Draw output
                         float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
                         float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
                         
                         //DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
 
-                        // Draw Pixels
-                        // TODO : MAKE IT FAST. Too slow if the image size so big and the pixel range so small.
-                        // 1. Maybe calculate in and draw from GPU, but how?
-                        // 2. Maybe batching with renderTexture and draw when the texture is complete?
 
                         Rectangle tiles{};
                         for (size_t y = 0; y < p->ImagePixels.size(); y++) {
@@ -1233,6 +1263,67 @@ void UpdateDraw()
     }
 
 
+}
+
+void redrawRenderTexture(Rectangle& pixelDrawArea)
+{
+    static bool firstSetup = true;
+    if (firstSetup) p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+
+    if (p->reload_setup) {
+        if (p->renderTexture.texture.height != 0) {
+            UnloadRenderTexture(p->renderTexture);
+            p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+        }
+    }
+
+    BeginTextureMode(p->renderTexture);
+    ClearBackground(BLANK);
+
+    float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
+    float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+
+    Rectangle tiles{};
+    for (size_t y = 0; y < p->ImagePixels.size(); y++) {
+        for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
+            tiles = {
+                pixelDrawArea.x + (x * tiles_w),
+                pixelDrawArea.y + (y * tiles_h),
+                tiles_w,
+                tiles_h
+            };
+
+            float pad = p->g_space * 0.3F;
+            float corner = p->g_corner * 0.1F;
+            Rectangle pixel = {
+                tiles.x + (pad * 1),
+                tiles.y + (pad * 1),
+                tiles.width - (pad * 2),
+                tiles.height - (pad * 2),
+            };
+
+            Color colorTile = p->ImagePixels[y][x];
+            DrawRectangleRounded(pixel, corner, 10, colorTile);
+
+            float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
+
+            Color textColor = (luminance > 128) ? BLACK : WHITE;
+
+            int w = p->ImagePixels[y].size();
+            int number = y * w + x;
+
+            if (p->g_number == "CASUAL") {
+                number = y * w + x + 1;
+            }
+
+            if (p->g_numbering) {
+                std::string text = std::to_string(number);
+                DrawTextCustom(pixel, text, CENTER, 0.7F, -0.5F, p->fontNumber, textColor);
+            }
+
+        }
+    }
+    EndTextureMode();
 }
 
 ImageSize CalculateFlexibleImage()
@@ -1423,11 +1514,11 @@ void LoadSetup(int new_width, int new_height)
         p->texture_input = LoadTextureFromImage(p->ImageInput);
 
         Image image_process = ImageCopy(p->ImageInput);
+
         UnloadImage(p->ImageOutput);
-
         p->ImageOutput = ImageCopy(image_process);
-        UnloadImage(image_process);
 
+        UnloadImage(image_process);
 
         // Make it Smaller
         ImageResizeNN(&p->ImageOutput, new_widthSize, new_heightSize);
@@ -1441,6 +1532,7 @@ void LoadSetup(int new_width, int new_height)
         for (size_t i = 0; i < h * w; i++) {
             smallPixelData.push_back(colorPointer[i]);
         }
+        UnloadImageColors(colorPointer);
 
         std::cout << smallPixelData.size() << std::endl;
 
