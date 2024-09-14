@@ -358,6 +358,7 @@ void InputTextBox(Rectangle& inputTitleBase);
 Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
 void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor);
 void Exporting();
+void ExportingHighResImage();
 
 void OutputFolderTest();
 
@@ -388,9 +389,9 @@ int main()
 
         EndDrawing();
 
-
         if (p->g_exporting) {
             Exporting();
+            ExportingHighResImage();
         }
 
         if (p->closeThisApp) break;
@@ -420,6 +421,78 @@ void OutputFolderTest()
             TraceLog(LOG_INFO, info.c_str());
         }
     }
+}
+
+void ExportingHighResImage() {
+    int highresW = 3820;
+    int highresH = 2160;
+
+    Rectangle highresRect = { 0,0,highresW,highresH };
+    Rectangle flexibleHighres = FlexibleRectangle(highresRect, p->flexibleSize.w, p->flexibleSize.h);
+
+    RenderTexture2D highresTexture = LoadRenderTexture(flexibleHighres.width, flexibleHighres.height);
+
+    BeginTextureMode(highresTexture);
+    ClearBackground(BLANK);
+
+    float pad = 2;
+    Rectangle pixelDrawArea = {
+        pad * 1,
+        pad * 1,
+        flexibleHighres.width - (pad * 2),
+        flexibleHighres.height - (pad * 2),
+    };
+
+    if (p->texture_input.height != 0) {
+        float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
+        float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+
+        Rectangle tiles{};
+        for (size_t y = 0; y < p->ImagePixels.size(); y++) {
+            for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
+                tiles = {
+                    pixelDrawArea.x + (x * tiles_w),
+                    pixelDrawArea.y + (y * tiles_h),
+                    tiles_w,
+                    tiles_h
+                };
+
+                float pad = p->g_space * 0.3F;
+                float corner = p->g_corner * 0.1F;
+                Rectangle pixel = {
+                    tiles.x + (pad * 1),
+                    tiles.y + (pad * 1),
+                    tiles.width - (pad * 2),
+                    tiles.height - (pad * 2),
+                };
+
+                Color colorTile = p->ImagePixels[y][x];
+                DrawRectangleRounded(pixel, corner, 10, colorTile);
+
+                float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
+                Color textColor = (luminance > 128) ? BLACK : WHITE;
+
+                int w = p->ImagePixels[y].size();
+                int number = y * w + x;
+
+                if (p->g_number == "CASUAL") {
+                    number += 1;
+                }
+
+                if (p->g_numbering) {
+                    std::string text = std::to_string(number);
+                    DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, p->fontNumber, textColor);
+                }
+            }
+        }
+    }
+    EndTextureMode();
+
+    Image highresImage = LoadImageFromTexture(highresTexture.texture);
+    ImageFlipVertical(&highresImage);
+    ExportImage(highresImage, "highres_output.png");
+    UnloadImage(highresImage);
+    UnloadRenderTexture(highresTexture);
 }
 
 void Exporting() {
@@ -650,64 +723,6 @@ void UpdateDraw()
                                 {
                                     // USING POINTER COLOR DOESNT WORK. ;[
                                     // SO WE WILL USE ANOTHER WAY.
-                                    sf::Vector2u sfmlImageSize = sfmlImage.getSize();
-                                    int w = sfmlImageSize.x;
-                                    int h = sfmlImageSize.y;
-
-                                    // Color Pointer
-                                    const sf::Uint8* sfmlColorPtr = sfmlImage.getPixelsPtr();
-                                    std::cout << "PASS STEP 1" << std::endl;
-
-                                    //std::vector<unsigned char> ColorVectors{};
-                                    //std::vector<uint8_t> ColorVectors{};
-                                    //ColorVectors.reserve(w * h * 4);
-                                    //for (size_t i = 0; i < h * w * 4; i++) {
-                                    //    ColorVectors.push_back(sfmlColorPtr[i]);
-                                    //}
-                                    //std::cout << ColorVectors.size() << std::endl;
-
-                                    ////ColorVectors.assign(sfmlColorPtr, sfmlColorPtr + w * h * 4);
-                                    //std::cout << ColorVectors.size() << std::endl;
-                                    //std::cout << "PASS STEP 2" << std::endl;
-
-                                    // Load Image Input from Pointer Colors
-                                    /*Image raylibImage = {
-                                        ColorVectors.data(),
-                                        w,
-                                        h,
-                                        1,
-                                        PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-                                    };*/
-
-                                    std::vector<Color> colorVectors{};
-                                    colorVectors.reserve(w * h);
-                                    for (size_t i = 0; i < w * h; i++) {
-                                        Color color = {
-                                            sfmlColorPtr[i * 4 + 0], // r
-                                            sfmlColorPtr[i * 4 + 1], // g
-                                            sfmlColorPtr[i * 4 + 2], // b
-                                            sfmlColorPtr[i * 4 + 3], // a
-                                        };
-                                        colorVectors.push_back(color);
-                                    }
-
-                                    //Image raylibImage = {
-                                    //    colorVectors.data(),
-                                    //    w,
-                                    //    h,
-                                    //    1,
-                                    //    PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-                                    //};
-
-                                    //p->ImageInput = raylibImage;
-
-                                    p->ImageInput = {
-                                        colorVectors.data(),
-                                        w,
-                                        h,
-                                        1,
-                                        PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
-                                    };
                                 }
 
                                 if (1)
@@ -1081,11 +1096,12 @@ void UpdateDraw()
                         float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
                         float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
                         
-                        DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
+                        //DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
 
                         // Draw Pixels
                         // TODO : MAKE IT FAST. Too slow if the image size so big and the pixel range so small.
                         // 1. Maybe calculate in and draw from GPU, but how?
+                        // 2. Maybe batching with renderTexture and draw when the texture is complete?
 
                         Rectangle tiles{};
                         for (size_t y = 0; y < p->ImagePixels.size(); y++) {
@@ -1128,8 +1144,6 @@ void UpdateDraw()
 
                             }
                         }
-
-                        EndShaderMode();
 
                     }
 
@@ -1209,7 +1223,7 @@ void UpdateDraw()
                     }
 
                     // MADE BY UFTHaq
-                    std::string text = "Created on Aug 2024 by UFTHaq";
+                    std::string text = "UFTHaq";
                     DrawTextCustom(FooterSection, text, RIGHT, 0.7F, 0.0F, p->fontGeneral, WHITE);
                     
 
