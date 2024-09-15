@@ -314,7 +314,7 @@ struct Plug {
     bool reload_setup{ true };
     ImageSize flexibleSize{};
     std::vector<std::vector<Color>> ImagePixels{};
-    std::vector<std::string> setupParameter{ "NUMBERING", "NUMBER", "SPACE", "CORNER", "PIXEL RANGE", "TITLE", "FORMAT" };
+    std::vector<std::string> setupParameter{ "NUMBERING", "NUMBER", "SPACE", "CORNER", "PIXEL RANGE", "TITLE", "RESOLUTION", "FORMAT" };
     std::vector<ButtonNumbering> argumentNumbering{ {OFF_NUMBERING, 1}, {ON_NUMBERING, 0}, };
     std::vector<ButtonNumber> argumentNumber{ {"CASUAL", 0}, {"INDEX", 1} };
     std::vector<ButtonExportFormat> argumentFormat{ {"PNG", 1}, {"JPG", 0} };
@@ -326,6 +326,7 @@ struct Plug {
     int g_pixelatedRange{25};
     int g_corner{3};
     int g_space{2};
+    int g_resolution{ 1 };
     std::string g_inputTitle{};
 
     bool g_exporting{ false };
@@ -424,8 +425,17 @@ void OutputFolderTest()
 }
 
 void ExportingHighResImage() {
-    int highresW = 3820;
-    int highresH = 2160;
+    int highresW{ 1920 };
+    int highresH{ 1080 };
+
+    if (p->g_resolution == 1) {
+        highresW = 1280;
+        highresH = 720;
+    }
+    else {
+        highresH *= (p->g_resolution - 1);
+        highresW *= (p->g_resolution - 1);
+    }
 
     Rectangle highresRect = { 0,0,highresW,highresH };
     Rectangle flexibleHighres = FlexibleRectangle(highresRect, p->flexibleSize.w, p->flexibleSize.h);
@@ -457,7 +467,7 @@ void ExportingHighResImage() {
                     tiles_h
                 };
 
-                float pad = p->g_space * 0.3F;
+                float pad = p->g_space * 0.5F * p->g_resolution;
                 float corner = p->g_corner * 0.1F;
                 Rectangle pixel = {
                     tiles.x + (pad * 1),
@@ -488,11 +498,12 @@ void ExportingHighResImage() {
     }
     EndTextureMode();
 
+    SetTextureFilter(highresTexture.texture, TEXTURE_FILTER_BILINEAR);
     Image highresImage = LoadImageFromTexture(highresTexture.texture);
     ImageFlipVertical(&highresImage);
     ExportImage(highresImage, "highres_output.png");
-    UnloadImage(highresImage);
     UnloadRenderTexture(highresTexture);
+    UnloadImage(highresImage);
 }
 
 void Exporting() {
@@ -683,7 +694,7 @@ void UpdateDraw()
                     MainLeftSection.x,
                     MainLeftSection.y,
                     MainLeftSection.width,
-                    MainLeftSection.height * 0.5F + spacing
+                    MainLeftSection.height * 0.425F + spacing
                 };
                 //DrawRectangleLinesEx(PanelInputImage, 0.5F, WHITE);
                 DrawRectangleRounded(PanelInputImage, 0.05F, 10, p->ColorPanel);
@@ -978,7 +989,7 @@ void UpdateDraw()
                             }
                             else if (p->setupParameter.at(i) == "PIXEL RANGE") {
 
-                                static SliderInput SliderPixel{ argument, (float)p->g_pixelatedRange, 3, 60, false };
+                                static SliderInput SliderPixel{ argument, (float)p->g_pixelatedRange, 2, 80, false };
                                 SliderPixel.Run();
 
                                 if (CheckCollisionPointRec(p->mousePosition, argument)) {
@@ -1008,6 +1019,20 @@ void UpdateDraw()
 
                                 InputTextBox(inputTitleBase);
 
+                            }
+                            else if (p->setupParameter.at(i) == "RESOLUTION") {
+                                static SliderInput SliderResolution{ argument, (float)p->g_resolution, 1, 4, false};
+                                SliderResolution.Run();
+
+                                if (CheckCollisionPointRec(p->mousePosition, argument)) {
+                                    int newVal = (int)SliderResolution.GetValue();
+                                    static int oldVal = newVal;
+
+                                    if (newVal != oldVal) {
+                                        p->g_resolution = newVal;
+                                        oldVal = newVal;
+                                    }
+                                }
                             }
                             else if (p->setupParameter.at(i) == "FORMAT") {
 
@@ -1105,7 +1130,6 @@ void UpdateDraw()
                     // 1. Maybe calculate in and draw from GPU, but how?
                     // 2. Maybe batching with renderTexture and draw when the texture is complete?
 
-
                     // NEW
                     if (p->texture_input.height != 0) {
 
@@ -1120,8 +1144,8 @@ void UpdateDraw()
                         Rectangle newPixelDrawArea = {
                             0,
                             0,
-                            pixelDrawArea.width * 1.5F,
-                            pixelDrawArea.height * 1.5F
+                            (int)(pixelDrawArea.width * 1.5F),
+                            (int)(pixelDrawArea.height * 1.5F)
                         };
 
                         if (p->redrawTexture) {
@@ -1129,9 +1153,22 @@ void UpdateDraw()
                             p->redrawTexture = false;
                         }
 
-                        Rectangle source{ 0,0,newPixelDrawArea.width, -newPixelDrawArea.height };
-                        Rectangle dest{ pixelDrawArea };
-                        DrawTexturePro(p->renderTexture.texture, source, dest, {0}, 0, WHITE);
+                        {
+                            Rectangle source{
+                                0,
+                                0,
+                                newPixelDrawArea.width,
+                                -newPixelDrawArea.height };
+
+                            Rectangle dest{
+                                (int)pixelDrawArea.x,
+                                (int)pixelDrawArea.y,
+                                (int)pixelDrawArea.width,
+                                (int)pixelDrawArea.height,
+                            };
+                            
+                            DrawTexturePro(p->renderTexture.texture, source, dest, { 0 }, 0, WHITE);
+                        }
                     }
 
                     // OLD
@@ -1243,11 +1280,16 @@ void UpdateDraw()
                             FooterSection.height - (pad * 2)
                         };
                         static bool isHover = false;
-                        Color color = { 52, 148,65, 255 };
+                        Color color{};
+                        Color colorText{};
+
+                        const Color colorPressed{ 52, 148,65, 255 };
+                        const Color colorNormal{ 180, 180, 180, 255 };
 
                         if (CheckCollisionPointRec(p->mousePosition, buttonExport)) {
                             isHover = true;
-                            color = color;
+                            color = colorPressed;
+                            colorText = WHITE;
 
                             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                                 p->g_exportPath = p->g_folderPath + p->g_inputTitle + p->g_format;
@@ -1255,13 +1297,15 @@ void UpdateDraw()
                             }
                         }
                         else {
-                            color = { 42, 128,55, 255 };
+                            //color = { 42, 128,55, 255 };
+                            color = colorNormal;
+                            colorText = BLACK;
                         }
 
                         DrawRectangleRounded(buttonExport, 0.3F, 10, color);
 
                         std::string text{ "EXPORT" };
-                        DrawTextCustom(buttonExport, text, CENTER, 0.9F, 1.0F, p->fontGeneral, WHITE);
+                        DrawTextCustom(buttonExport, text, CENTER, 0.9F, 1.0F, p->fontGeneral, colorText);
                     }
 
                     // MADE BY UFTHaq
@@ -1308,7 +1352,7 @@ void redrawRenderTexture(Rectangle& pixelDrawArea)
                 tiles_h
             };
 
-            float pad = p->g_space * 0.5F;
+            float pad = p->g_space * 0.55F;
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
                 tiles.x + (pad * 1),
@@ -1339,6 +1383,7 @@ void redrawRenderTexture(Rectangle& pixelDrawArea)
         }
     }
     EndTextureMode();
+    SetTextureFilter(p->renderTexture.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 ImageSize CalculateFlexibleImage()
