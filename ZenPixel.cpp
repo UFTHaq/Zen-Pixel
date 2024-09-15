@@ -437,7 +437,9 @@ void ExportingHighResImage() {
         highresW *= (p->g_resolution - 1);
     }
 
-    Rectangle highresRect = { 0,0,highresW,highresH };
+    int SSAA = 2; // Cant USE 3 OR 4 because in somecase the image will be too big and the app crash. But 2 is enough.
+
+    Rectangle highresRect = { 0,0,highresW * SSAA,highresH * SSAA };
     Rectangle flexibleHighres = FlexibleRectangle(highresRect, p->flexibleSize.w, p->flexibleSize.h);
 
     RenderTexture2D highresTexture = LoadRenderTexture(flexibleHighres.width, flexibleHighres.height);
@@ -501,7 +503,14 @@ void ExportingHighResImage() {
     SetTextureFilter(highresTexture.texture, TEXTURE_FILTER_BILINEAR);
     Image highresImage = LoadImageFromTexture(highresTexture.texture);
     ImageFlipVertical(&highresImage);
+
+    // SUPER SAMPLING BY DOWNSCALE
+    highresW = (int)(flexibleHighres.width / SSAA);
+    highresH = (int)(flexibleHighres.height / SSAA);
+
+    ImageResize(&highresImage, highresW, highresH);
     ExportImage(highresImage, "highres_output.png");
+
     UnloadRenderTexture(highresTexture);
     UnloadImage(highresImage);
 }
