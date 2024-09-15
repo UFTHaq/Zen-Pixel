@@ -23,6 +23,8 @@
 struct RectSize {
     float w{ 1510 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
     float h{ 910 };
+    //float w{ 1210 };
+    //float h{ 810 };
 };
 
 struct ImageSize {
@@ -337,7 +339,8 @@ struct Plug {
 
     Shader shaderRoundedRect{};
     bool redrawTexture{ true };
-    RenderTexture2D renderTexture{};
+    RenderTexture2D renderTextureLiveView{};
+    Texture2D textureLiveViewSSAA{};
 };
 
 Plug ZenPlug{};
@@ -354,7 +357,7 @@ void InitializedIcons(void);
 void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
-void redrawRenderTexture(Rectangle& pixelDrawArea);
+void redrawRenderTexture(Rectangle& DrawArea);
 ImageSize CalculateFlexibleImage();
 
 void InputTextBox(Rectangle& inputTitleBase);
@@ -469,7 +472,9 @@ void ExportingHighResImage() {
                     tiles_h
                 };
 
-                float pad = p->g_space * 0.5F * p->g_resolution;
+                float pad{};
+                if (p->g_resolution == 1) pad = p->g_space * 0.5F * 1.5F;
+                else pad = p->g_space * 0.5F * (p->g_resolution - 1) * SSAA;
                 float corner = p->g_corner * 0.1F;
                 Rectangle pixel = {
                     tiles.x + (pad * 1),
@@ -593,7 +598,7 @@ void UpdateDraw()
 {
     p->mousePosition = GetMousePosition();
 
-    RectSize BaseApp{ 1500, 900 };
+    RectSize BaseApp{ p->Screen.w - 10, p->Screen.h - 10 };
     //RectSize BaseApp{ 1600, 1000 };
     Rectangle BaseAppRect{
         (p->Screen.w - BaseApp.w) / 2,
@@ -1118,6 +1123,9 @@ void UpdateDraw()
                 {
                     p->flexible_panel_output = FlexibleRectangle(PanelOutputImage, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
+                    // RenderTextureArea
+                    Rectangle FHD{ 0, 0, 1920, 1080 };
+                    Rectangle flexArea = FlexibleRectangle(FHD, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
                     p->flexible_panel_crop = {
                         p->flexible_panel_output.x,
@@ -1142,7 +1150,7 @@ void UpdateDraw()
                     // NEW
                     if (p->texture_input.height != 0) {
 
-                        Rectangle newFlexible = pixelDrawArea;
+                        Rectangle newFlexible = flexArea;
                         static Rectangle oldFlexible = newFlexible;
 
                         if ((newFlexible.height != oldFlexible.height) || (newFlexible.width != oldFlexible.width)) {
@@ -1151,10 +1159,10 @@ void UpdateDraw()
                         }
 
                         Rectangle newPixelDrawArea = {
-                            0,
-                            0,
-                            (int)(pixelDrawArea.width * 1.5F),
-                            (int)(pixelDrawArea.height * 1.5F)
+                            (int)pad,
+                            (int)pad,
+                            (int)(flexArea.width * 1),
+                            (int)(flexArea.height * 1)
                         };
 
                         if (p->redrawTexture) {
@@ -1176,7 +1184,8 @@ void UpdateDraw()
                                 (int)pixelDrawArea.height,
                             };
                             
-                            DrawTexturePro(p->renderTexture.texture, source, dest, { 0 }, 0, WHITE);
+                            //DrawTexturePro(p->renderTextureLiveView.texture, source, dest, { 0 }, 0, WHITE);
+                            DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
                         }
                     }
 
@@ -1226,7 +1235,7 @@ void UpdateDraw()
 
                                 if (p->g_numbering) {
                                     std::string text = std::to_string(number);
-                                    DrawTextCustom(pixel, text, CENTER, 0.75F, -0.5F, p->fontNumber, textColor);
+                                    DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
                                 }
 
 
@@ -1330,44 +1339,52 @@ void UpdateDraw()
 
 }
 
-void redrawRenderTexture(Rectangle& pixelDrawArea)
+void redrawRenderTexture(Rectangle& DrawArea)
 {
+    int SSAA = 2;
+    Rectangle liveViewArea = {
+        DrawArea.x,
+        DrawArea.y,
+        DrawArea.width * SSAA,
+        DrawArea.height * SSAA,
+    };
+
     static bool firstSetup = true;
     if (firstSetup) {
-        p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+        p->renderTextureLiveView = LoadRenderTexture((int)liveViewArea.width, (int)liveViewArea.height);
         firstSetup = false;
     }
 
     if (p->reload_setup) {
-        if (p->renderTexture.texture.height != 0) {
-            UnloadRenderTexture(p->renderTexture);
-            p->renderTexture = LoadRenderTexture((int)pixelDrawArea.width, (int)pixelDrawArea.height);
+        if (p->renderTextureLiveView.texture.height != 0) {
+            UnloadRenderTexture(p->renderTextureLiveView);
+            p->renderTextureLiveView = LoadRenderTexture((int)liveViewArea.width, (int)liveViewArea.height);
         }
     }
 
-    BeginTextureMode(p->renderTexture);
-    ClearBackground(BLANK);
+    BeginTextureMode(p->renderTextureLiveView);
+    ClearBackground(p->ColorPanel);
 
-    float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
-    float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
+    float tiles_w = liveViewArea.width / p->ImagePixels[0].size();
+    float tiles_h = liveViewArea.height / p->ImagePixels.size();
 
     Rectangle tiles{};
     for (size_t y = 0; y < p->ImagePixels.size(); y++) {
         for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
             tiles = {
-                pixelDrawArea.x + (x * tiles_w),
-                pixelDrawArea.y + (y * tiles_h),
+                liveViewArea.x + (x * tiles_w),
+                liveViewArea.y + (y * tiles_h),
                 tiles_w,
                 tiles_h
             };
 
-            float pad = p->g_space * 0.55F;
+            float pad = p->g_space * 0.5F * 1 * SSAA;
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
-                tiles.x + (pad * 1),
-                tiles.y + (pad * 1),
-                tiles.width - (pad * 2),
-                tiles.height - (pad * 2),
+                (int)(tiles.x + (pad * 1)),
+                (int)(tiles.y + (pad * 1)),
+                (int)(tiles.width - (pad * 2)),
+                (int)(tiles.height - (pad * 2)),
             };
 
             Color colorTile = p->ImagePixels[y][x];
@@ -1386,13 +1403,25 @@ void redrawRenderTexture(Rectangle& pixelDrawArea)
 
             if (p->g_numbering) {
                 std::string text = std::to_string(number);
-                DrawTextCustom(pixel, text, CENTER, 0.7F, -0.5F, p->fontNumber, textColor);
+                DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
             }
 
         }
     }
     EndTextureMode();
-    SetTextureFilter(p->renderTexture.texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(p->renderTextureLiveView.texture, TEXTURE_FILTER_TRILINEAR);
+
+    Image temporary = LoadImageFromTexture(p->renderTextureLiveView.texture);
+    
+    ImageResize(&temporary, liveViewArea.width / SSAA, liveViewArea.height / SSAA);
+
+    if (p->textureLiveViewSSAA.height > 0) {
+        UnloadTexture(p->textureLiveViewSSAA);
+    }
+    p->textureLiveViewSSAA = LoadTextureFromImage(temporary);
+    SetTextureFilter(p->textureLiveViewSSAA, TEXTURE_FILTER_TRILINEAR);
+
+    UnloadImage(temporary);
 }
 
 ImageSize CalculateFlexibleImage()
