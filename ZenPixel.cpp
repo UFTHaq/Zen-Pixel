@@ -21,10 +21,10 @@
 #define ICON_EXIT                               {"resources/Icons/Exit.png"}
 
 struct RectSize {
-    float w{ 1510 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
-    float h{ 910 };
-    //float w{ 1210 };
-    //float h{ 810 };
+    //float w{ 1510 };    // IF i put 1920, or fullscreen, then it will be broken, not transparent anymore, and the FLAG_WINDOW_FULLSCREEN do the same.
+    //float h{ 910 };
+    float w{ 1260 };
+    float h{ 860 };
 };
 
 struct ImageSize {
@@ -46,7 +46,7 @@ struct SliderInput {
     SliderInput(Rectangle area, float initialValue, float minValue, float maxValue, bool dragging) :
         area(area), value(initialValue), minValue(minValue), maxValue(maxValue), dragging(dragging) 
     {
-        float smallRectWidthCoef = 0.2F;
+        float smallRectWidthCoef = 0.225F;
         minValRect = {
             area.x,
             area.y,
@@ -302,7 +302,8 @@ struct Plug {
     Color ColorPanel     { 40,48,60,255 };
     Color ColorPanel2    { 20,25,27,255 };
     Font fontGeneral{};
-    Font fontNumber{};
+    Font fontNumberLowRes{};
+    Font fontNumberHighRes{};
     Texture2D TexZEN{};
     Texture2D TexExit{};
     float LabelSize{ 30 };
@@ -359,10 +360,8 @@ void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
 void redrawRenderTexture(Rectangle& DrawArea);
 ImageSize CalculateFlexibleImage();
-
-void InputTextBox(Rectangle& inputTitleBase);
-
 Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
+void InputTextBox(Rectangle& inputTitleBase);
 void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor);
 void Exporting();
 void ExportingHighResImage();
@@ -373,11 +372,10 @@ int main()
 //int WinMain()
 {
     SetConfigFlags(FLAG_WINDOW_ALWAYS_RUN);
-    //SetConfigFlags(FLAG_WINDOW_TOPMOST);
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     SetConfigFlags(FLAG_WINDOW_UNDECORATED);
     SetConfigFlags(FLAG_WINDOW_TRANSPARENT);
-    InitWindow(p->Screen.w, p->Screen.h, p->AppTitle.c_str());
+    InitWindow((int)p->Screen.w, (int)p->Screen.h, p->AppTitle.c_str());
     SetTargetFPS(60);
 
     OutputFolderTest();
@@ -442,10 +440,10 @@ void ExportingHighResImage() {
 
     int SSAA = 2; // Cant USE 3 OR 4 because in somecase the image will be too big and the app crash. But 2 is enough.
 
-    Rectangle highresRect = { 0,0,highresW * SSAA,highresH * SSAA };
+    Rectangle highresRect = { 0,0,float(highresW * SSAA),float(highresH * SSAA) };
     Rectangle flexibleHighres = FlexibleRectangle(highresRect, p->flexibleSize.w, p->flexibleSize.h);
 
-    RenderTexture2D highresTexture = LoadRenderTexture(flexibleHighres.width, flexibleHighres.height);
+    RenderTexture2D highresTexture = LoadRenderTexture((int)flexibleHighres.width, (int)flexibleHighres.height);
 
     BeginTextureMode(highresTexture);
     ClearBackground(BLANK);
@@ -489,8 +487,8 @@ void ExportingHighResImage() {
                 float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
                 Color textColor = (luminance > 128) ? BLACK : WHITE;
 
-                int w = p->ImagePixels[y].size();
-                int number = y * w + x;
+                size_t w = p->ImagePixels[y].size();
+                size_t number = y * w + x;
 
                 if (p->g_number == "CASUAL") {
                     number += 1;
@@ -498,7 +496,9 @@ void ExportingHighResImage() {
 
                 if (p->g_numbering) {
                     std::string text = std::to_string(number);
-                    DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
+                    Font font{ p->fontNumberLowRes };
+                    if (p->g_resolution >= 3) font = p->fontNumberHighRes;
+                    DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, font, textColor);
                 }
             }
         }
@@ -850,7 +850,7 @@ void UpdateDraw()
                             //DrawRectangleLinesEx(parameter, 0.2F, WHITE);
 
                             std::string text = p->setupParameter.at(i);
-                            DrawTextCustom(parameter, text, LEFT, 0.55F, 1.0F, p->fontGeneral, WHITE);
+                            DrawTextCustom(parameter, text, LEFT, 0.54F, 1.0F, p->fontGeneral, WHITE);
                         }
 
                         // PanelArgument
@@ -1114,7 +1114,7 @@ void UpdateDraw()
                     MainRightSection.x,
                     MainRightSection.y,
                     PanelBase.width - MainLeftSection.width - spacing,
-                    MainRightSection.height * 0.92F + spacing,
+                    MainRightSection.height * 0.915F + spacing,
                 };
                 //DrawRectangleLinesEx(PanelOutputImage, 0.5F, WHITE);
                 DrawRectangleRounded(PanelOutputImage, 0.02F, 10, p->ColorPanel);
@@ -1142,11 +1142,6 @@ void UpdateDraw()
                         p->flexible_panel_output.height - (pad * 2),
                     };
 
-                    // Draw Pixels
-                    // TODO : MAKE IT FAST. Too slow if the image size so big and the pixel range so small.
-                    // 1. Maybe calculate in and draw from GPU, but how?
-                    // 2. Maybe batching with renderTexture and draw when the texture is complete?
-
                     // NEW
                     if (p->texture_input.height != 0) {
 
@@ -1159,10 +1154,10 @@ void UpdateDraw()
                         }
 
                         Rectangle newPixelDrawArea = {
-                            (int)pad,
-                            (int)pad,
-                            (int)(flexArea.width * 1),
-                            (int)(flexArea.height * 1)
+                            pad,
+                            pad,
+                            (float)(int)(flexArea.width * 1),
+                            (float)(int)(flexArea.height * 1)
                         };
 
                         if (p->redrawTexture) {
@@ -1170,82 +1165,21 @@ void UpdateDraw()
                             p->redrawTexture = false;
                         }
 
-                        {
-                            Rectangle source{
-                                0,
-                                0,
-                                newPixelDrawArea.width,
-                                -newPixelDrawArea.height };
+                        Rectangle source{
+                            0,
+                            0,
+                            newPixelDrawArea.width,
+                            -newPixelDrawArea.height 
+                        };
 
-                            Rectangle dest{
-                                (int)pixelDrawArea.x,
-                                (int)pixelDrawArea.y,
-                                (int)pixelDrawArea.width,
-                                (int)pixelDrawArea.height,
-                            };
-                            
-                            //DrawTexturePro(p->renderTextureLiveView.texture, source, dest, { 0 }, 0, WHITE);
-                            DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
-                        }
+                        Rectangle dest{
+                            (float)(int)pixelDrawArea.x,
+                            (float)(int)pixelDrawArea.y,
+                            (float)(int)pixelDrawArea.width,
+                            (float)(int)pixelDrawArea.height,
+                        };
+                        DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
                     }
-
-                    // OLD
-                    if (0) {
-                    //if (p->texture_input.height != 0) {
-
-                        // Draw output
-                        float tiles_w = pixelDrawArea.width / p->ImagePixels[0].size();
-                        float tiles_h = pixelDrawArea.height / p->ImagePixels.size();
-                        
-                        //DrawRectangleRec(p->flexible_panel_output, p->ColorTitleBar);
-
-
-                        Rectangle tiles{};
-                        for (size_t y = 0; y < p->ImagePixels.size(); y++) {
-                            for (size_t x = 0; x < p->ImagePixels[y].size(); x++) {
-                                tiles = {
-                                    pixelDrawArea.x + (x * tiles_w),
-                                    pixelDrawArea.y + (y * tiles_h),
-                                    tiles_w,
-                                    tiles_h
-                                };
-
-                                float pad = p->g_space * 0.3F;
-                                float corner = p->g_corner * 0.1F;
-                                Rectangle pixel = {
-                                    tiles.x + (pad * 1),
-                                    tiles.y + (pad * 1),
-                                    tiles.width - (pad * 2),
-                                    tiles.height - (pad * 2),
-                                };
-
-                                Color colorTile = p->ImagePixels[y][x];
-                                DrawRectangleRounded(pixel, corner, 10, colorTile);
-
-                                float luminance = 0.2126f * colorTile.r + 0.7152f * colorTile.g + 0.0722f * colorTile.b;
-
-                                Color textColor = (luminance > 128) ? BLACK : WHITE;
-
-                                int w = p->ImagePixels[y].size();
-                                int number = y * w + x;
-
-                                if (p->g_number == "CASUAL") {
-                                    number = y * w + x + 1;
-                                }
-
-                                if (p->g_numbering) {
-                                    std::string text = std::to_string(number);
-                                    DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
-                                }
-
-
-                            }
-                        }
-
-                    }
-
-
-
                 }
 
                 Rectangle FooterSection{
@@ -1323,7 +1257,7 @@ void UpdateDraw()
                         DrawRectangleRounded(buttonExport, 0.3F, 10, color);
 
                         std::string text{ "EXPORT" };
-                        DrawTextCustom(buttonExport, text, CENTER, 0.9F, 1.0F, p->fontGeneral, colorText);
+                        DrawTextCustom(buttonExport, text, CENTER, 0.82F, 1.0F, p->fontGeneral, colorText);
                     }
 
                     // MADE BY UFTHaq
@@ -1381,10 +1315,10 @@ void redrawRenderTexture(Rectangle& DrawArea)
             float pad = p->g_space * 0.5F * 1 * SSAA;
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
-                (int)(tiles.x + (pad * 1)),
-                (int)(tiles.y + (pad * 1)),
-                (int)(tiles.width - (pad * 2)),
-                (int)(tiles.height - (pad * 2)),
+                (float)(int)(tiles.x + (pad * 1)),
+                (float)(int)(tiles.y + (pad * 1)),
+                (float)(int)(tiles.width - (pad * 2)),
+                (float)(int)(tiles.height - (pad * 2)),
             };
 
             Color colorTile = p->ImagePixels[y][x];
@@ -1394,8 +1328,8 @@ void redrawRenderTexture(Rectangle& DrawArea)
 
             Color textColor = (luminance > 128) ? BLACK : WHITE;
 
-            int w = p->ImagePixels[y].size();
-            int number = y * w + x;
+            size_t w = p->ImagePixels[y].size();
+            size_t number = y * w + x;
 
             if (p->g_number == "CASUAL") {
                 number = y * w + x + 1;
@@ -1403,7 +1337,7 @@ void redrawRenderTexture(Rectangle& DrawArea)
 
             if (p->g_numbering) {
                 std::string text = std::to_string(number);
-                DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumber, textColor);
+                DrawTextCustom(pixel, text, CENTER, 0.65F, -0.5F, p->fontNumberLowRes, textColor);
             }
 
         }
@@ -1413,7 +1347,7 @@ void redrawRenderTexture(Rectangle& DrawArea)
 
     Image temporary = LoadImageFromTexture(p->renderTextureLiveView.texture);
     
-    ImageResize(&temporary, liveViewArea.width / SSAA, liveViewArea.height / SSAA);
+    ImageResize(&temporary, int(liveViewArea.width / SSAA), int(liveViewArea.height / SSAA));
 
     if (p->textureLiveViewSSAA.height > 0) {
         UnloadTexture(p->textureLiveViewSSAA);
@@ -1653,7 +1587,7 @@ void LoadSetup(int new_width, int new_height)
         matrixSmallImage.shrink_to_fit();
 
         // Make it Normal size Again
-        ImageResizeNN(&p->ImageOutput, p->flexibleSize.w, p->flexibleSize.h);
+        ImageResizeNN(&p->ImageOutput, (int)p->flexibleSize.w, (int)p->flexibleSize.h);
 
     }
 
@@ -1757,11 +1691,14 @@ void DrawNotification(Rectangle& panel, std::string text, int align, float size,
 
 void InitializedFont(void)
 {
-    p->fontGeneral = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 50, 0, 0);
+    p->fontGeneral = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 52, 0, 0);
     SetTextureFilter(p->fontGeneral.texture, TEXTURE_FILTER_BILINEAR);
 
-    p->fontNumber = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 35, 0, 0);
-    SetTextureFilter(p->fontNumber.texture, TEXTURE_FILTER_BILINEAR);
+    p->fontNumberLowRes = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 40, 0, 0);
+    SetTextureFilter(p->fontNumberLowRes.texture, TEXTURE_FILTER_BILINEAR);
+
+    p->fontNumberHighRes = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 90, 0, 0);
+    SetTextureFilter(p->fontNumberHighRes.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 void InitializedIcons(void)
