@@ -363,7 +363,6 @@ ImageSize CalculateFlexibleImage();
 Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
 void InputTextBox(Rectangle& inputTitleBase);
 void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor);
-void Exporting();
 void ExportingHighResImage();
 
 void OutputFolderTest();
@@ -377,6 +376,8 @@ int main()
     SetConfigFlags(FLAG_WINDOW_TRANSPARENT);
     InitWindow((int)p->Screen.w, (int)p->Screen.h, p->AppTitle.c_str());
     SetTargetFPS(60);
+    SetWindowIcon(LoadImage(ICON_ZEN));
+    SetTraceLogLevel(LOG_NONE);
 
     OutputFolderTest();
     InitializedFont();
@@ -393,7 +394,6 @@ int main()
         EndDrawing();
 
         if (p->g_exporting) {
-            Exporting();
             ExportingHighResImage();
         }
 
@@ -516,80 +516,65 @@ void ExportingHighResImage() {
     ImageResize(&highresImage, highresW, highresH);
     ExportImage(highresImage, "highres_output.png");
 
-    UnloadRenderTexture(highresTexture);
-    UnloadImage(highresImage);
-}
-
-void Exporting() {
     if (!p->g_inputTitle.empty()) {
-        // Process Export and Notification Success
         std::string title = p->g_exportPath;
 
         if (p->g_format == ".png") {
-            Image SS = LoadImageFromScreen();
-
-            ImageCrop(&SS, p->flexible_panel_crop);
-            if (ExportImage(SS, title.c_str())) {
+            // RAYLIB IMAGE EXPORT
+            if (ExportImage(highresImage, title.c_str())) {
                 p->notification = SUCCESS_EXPORT;
             }
             else {
                 p->notification = ERROR_EXPORT;
             }
-
-            UnloadImage(SS);
-
         }
         else if (p->g_format == ".jpg") {
-            // JPG WILL HANDLED BY SFML.
-            {
-                Image SS = LoadImageFromScreen();
-                ImageCrop(&SS, p->flexible_panel_crop);
+            // JPG HANDLED BY SFML.
+            int w = highresImage.width;
+            int h = highresImage.height;
 
-                int w = SS.width;
-                int h = SS.height;
+            Color* colorPointer = LoadImageColors(highresImage);
 
-                Color* colorPointer = LoadImageColors(SS);
+            std::vector<Color> colorsDataRaylib{};
+            colorsDataRaylib.reserve(w * h);
 
-                std::vector<Color> ColorsData{};
-                ColorsData.reserve(w * h);
-                for (size_t i = 0; i < h * w; i++) {
-                    ColorsData.push_back(colorPointer[i]);
-                }
+            for (size_t i = 0; i < w * h; i++) {
+                colorsDataRaylib.push_back(colorPointer[i]);
+            }
+            UnloadImageColors(colorPointer);
 
-                std::vector<sf::Uint8> pixelData{};
-                pixelData.reserve(w * h * 4);
+            std::vector<sf::Uint8> colorDataSFML{};
+            colorDataSFML.reserve(w * h * 4);
 
-                for (const auto& color : ColorsData) {
-                    pixelData.push_back(color.r);
-                    pixelData.push_back(color.g);
-                    pixelData.push_back(color.b);
-                    pixelData.push_back(color.a);
-                }
+            for (const auto& color : colorsDataRaylib) {
+                colorDataSFML.push_back(color.r);
+                colorDataSFML.push_back(color.g);
+                colorDataSFML.push_back(color.b);
+                colorDataSFML.push_back(color.a);
+            }
 
-                // Load Image with SFML from vector Color
-                sf::Image imageSFML{};
-                imageSFML.create(w, h, pixelData.data());
+            sf::Image imageSFML{};
+            imageSFML.create(w, h, colorDataSFML.data());
 
-                // SAVE IMAGE JPG
-                if (imageSFML.saveToFile(title)) {
-                    std::string log = "FILEIO: [" + title + "] File exported succesfully";
-                    TraceLog(LOG_INFO, log.c_str());
-                    p->notification = SUCCESS_EXPORT;
-                }
-                else {
-                    std::string log = "FILEIO: [" + title + "] File exporting failed";
-                    TraceLog(LOG_ERROR, log.c_str());
-                    p->notification = ERROR_EXPORT;
-                }
-
-                UnloadImageColors(colorPointer);
-                UnloadImage(SS);
+            // SFML IMAGE EXPORT
+            if (imageSFML.saveToFile(title)) {
+                std::string log = "FILEIO: [" + title + "] File exported succesfully";
+                TraceLog(LOG_INFO, log.c_str());
+                p->notification = SUCCESS_EXPORT;
+            }
+            else {
+                std::string log = "FILEIO: [" + title + "] File exporting failed";
+                TraceLog(LOG_ERROR, log.c_str());
+                p->notification = ERROR_EXPORT;
             }
         }
     }
     else {
         p->notification = WARNING_TITLE_EMPTY;
     }
+
+    UnloadRenderTexture(highresTexture);
+    UnloadImage(highresImage);
 
     p->g_exporting = false;
 }
@@ -745,12 +730,6 @@ void UpdateDraw()
                             if (sfmlImage.loadFromFile(cpp_file_path)) {
                                 TraceLog(LOG_INFO, "Success load image from SFML");
 
-                                if (0)
-                                {
-                                    // USING POINTER COLOR DOESNT WORK. ;[
-                                    // SO WE WILL USE ANOTHER WAY.
-                                }
-
                                 if (1)
                                 {
                                     // Save sfmlLmage to disk in png.
@@ -764,7 +743,6 @@ void UpdateDraw()
 
                                     std::filesystem::remove(temporaryImage);
                                 }
-
 
                             }
                             else {
@@ -1410,7 +1388,6 @@ void InputTextBox(Rectangle& inputTitleBase)
             key = GetKeyPressed();
         }
 
-
         // Backspace delete chars
         if (IsKeyPressed(KEY_BACKSPACE) && !p->g_inputTitle.empty()) {
             p->g_inputTitle.pop_back();
@@ -1566,7 +1543,7 @@ void LoadSetup(int new_width, int new_height)
         }
         UnloadImageColors(colorPointer);
 
-        std::cout << smallPixelData.size() << std::endl;
+        std::cout << "Total Pixels : " << smallPixelData.size() << std::endl;
 
         //for (auto& i : smallPixelData) {
         //    std::cout << (uint16_t)i.r << " ";
@@ -1691,13 +1668,13 @@ void DrawNotification(Rectangle& panel, std::string text, int align, float size,
 
 void InitializedFont(void)
 {
-    p->fontGeneral = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 52, 0, 0);
+    p->fontGeneral = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 40, 0, 0);
     SetTextureFilter(p->fontGeneral.texture, TEXTURE_FILTER_BILINEAR);
 
     p->fontNumberLowRes = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 40, 0, 0);
     SetTextureFilter(p->fontNumberLowRes.texture, TEXTURE_FILTER_BILINEAR);
 
-    p->fontNumberHighRes = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 90, 0, 0);
+    p->fontNumberHighRes = LoadFontEx(FONT_LOC_Sofia_Sans_Condensed_MED, 100, 0, 0);
     SetTextureFilter(p->fontNumberHighRes.texture, TEXTURE_FILTER_BILINEAR);
 }
 
