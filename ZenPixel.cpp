@@ -13,6 +13,7 @@
 
 #include <raylib.h>
 #include <rlgl.h>
+#include <raymath.h>
 #include <SFML/Graphics.hpp>
 #include "ZenPixel.h"
 
@@ -342,6 +343,8 @@ struct Plug {
     bool redrawTexture{ true };
     RenderTexture2D renderTextureLiveView{};
     Texture2D textureLiveViewSSAA{};
+
+    Camera2D cameraLiveView{};
 };
 
 Plug ZenPlug{};
@@ -364,8 +367,8 @@ Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float Object
 void InputTextBox(Rectangle& inputTitleBase);
 void DrawNotification(Rectangle& panel, std::string text, int align, float size, float space, const Color color, const Color fillColor);
 void ExportingHighResImage();
-
 void OutputFolderTest();
+
 
 int main()
 //int WinMain()
@@ -401,6 +404,11 @@ int main()
     }
     CloseWindow();
 
+}
+
+void InitializedCameraLiveView()
+{
+    
 }
 
 void OutputFolderTest()
@@ -1125,10 +1133,12 @@ void UpdateDraw()
 
                         Rectangle newFlexible = flexArea;
                         static Rectangle oldFlexible = newFlexible;
+                        static bool cameraSetup = true;
 
                         if ((newFlexible.height != oldFlexible.height) || (newFlexible.width != oldFlexible.width)) {
                             oldFlexible = newFlexible;
                             p->reload_setup = true;
+                            cameraSetup = true;
                         }
 
                         Rectangle newPixelDrawArea = {
@@ -1156,7 +1166,93 @@ void UpdateDraw()
                             (float)(int)pixelDrawArea.width,
                             (float)(int)pixelDrawArea.height,
                         };
-                        DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
+                        //DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
+
+                        
+                        BeginMode2D(p->cameraLiveView);
+
+                        // Camera setup, to be run once
+                        if (cameraSetup) {
+                            p->cameraLiveView.target = Vector2{
+                                p->textureLiveViewSSAA.width / 2.0F,
+                                p->textureLiveViewSSAA.height / 2.0F
+                            };
+
+                            p->cameraLiveView.offset = Vector2{
+                                p->textureLiveViewSSAA.width / 2.0F,
+                                p->textureLiveViewSSAA.height / 2.0F
+                            };
+
+                            p->cameraLiveView.rotation = 0.0F;
+                            p->cameraLiveView.zoom = 1.0F;  // Initial zoom
+
+                            cameraSetup = false;
+                        }
+
+                        //if (CheckCollisionPointRec(GetScreenToWorld2D(p->mousePosition, p->cameraLiveView), PanelOutputImage)) {
+                        if (CheckCollisionPointRec(p->mousePosition, PanelOutputImage)) {
+                            float zoomSpeed = 0.035F;
+                            float wheel = GetMouseWheelMove();
+
+                            if (wheel != 0) {
+                                p->cameraLiveView.zoom -= (wheel * zoomSpeed);
+                                p->cameraLiveView.zoom = Clamp(p->cameraLiveView.zoom, 0.1F, 4.0F);
+
+                                // Adjust target to ensure zooming is centered on the cursor
+                                Vector2 mouseWorldPos = GetScreenToWorld2D(p->mousePosition, p->cameraLiveView);
+
+                                Vector2 afterZoomWorldPos = GetScreenToWorld2D(p->mousePosition, p->cameraLiveView);
+                                Vector2 zoomDelta = Vector2Subtract(mouseWorldPos, afterZoomWorldPos);
+                                p->cameraLiveView.target = Vector2Add(p->cameraLiveView.target, zoomDelta);
+                            }
+
+                            if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
+                                //Vector2 mouseDelta = GetScreenToWorld2D(GetMouseDelta(), p->cameraLiveView);
+                                Vector2 mouseDelta = GetMouseDelta();
+                                p->cameraLiveView.target.x += mouseDelta.x / p->cameraLiveView.zoom;
+                                p->cameraLiveView.target.y += mouseDelta.y / p->cameraLiveView.zoom;
+                            }
+                        }
+
+                        // Use GetScreenToWorld2D to calculate the correct world space position for the destination rectangle
+                        Vector2 topLeft = GetScreenToWorld2D(
+                            Vector2{ (float)pixelDrawArea.x, (float)pixelDrawArea.y }, 
+                            p->cameraLiveView
+                        );
+
+                        Vector2 bottomRight = GetScreenToWorld2D(
+                            Vector2{ 
+                                (float)(pixelDrawArea.x + pixelDrawArea.width), 
+                                (float)(pixelDrawArea.y + pixelDrawArea.height)
+                            }, 
+                            p->cameraLiveView
+                        );
+
+                        // Adjust destination rectangle using the transformed coordinates
+                        dest = {
+                            topLeft.x,
+                            topLeft.y,
+                            bottomRight.x - topLeft.x,  // Width of the destination rectangle
+                            bottomRight.y - topLeft.y   // Height of the destination rectangle
+                        };
+
+                        
+                        // Apply Scissor Mode to constrain the drawing to the panel area
+                        int pad = 0;
+                        BeginScissorMode(
+                            PanelOutputImage.x + (pad * 1), 
+                            PanelOutputImage.y + (pad * 1),
+                            PanelOutputImage.width - (pad * 2),
+                            PanelOutputImage.height - (pad * 2)
+                        );
+
+                        // Draw the texture with zoom and panning applied
+
+                        EndMode2D();
+
+                        DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0, 0 }, 0, WHITE);
+                        EndScissorMode();
+
                     }
                 }
 
