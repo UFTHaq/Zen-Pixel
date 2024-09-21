@@ -1031,6 +1031,7 @@ void UpdateDraw()
                                     if (newVal != oldVal) {
                                         p->g_resolution = newVal;
                                         oldVal = newVal;
+                                        p->redrawTexture = true;
                                     }
                                 }
                             }
@@ -1097,21 +1098,28 @@ void UpdateDraw()
             // MainRightSection
             {
                 Rectangle PanelOutputImage{
-                    MainRightSection.x,
-                    MainRightSection.y,
-                    PanelBase.width - MainLeftSection.width - spacing,
-                    MainRightSection.height * 0.915F + spacing,
+                    (float)(int)MainRightSection.x,
+                    (float)(int)MainRightSection.y,
+                    (float)(int)PanelBase.width - MainLeftSection.width - spacing,
+                    (float)(int)MainRightSection.height * 0.915F + spacing,
                 };
                 //DrawRectangleLinesEx(PanelOutputImage, 0.5F, WHITE);
-                DrawRectangleRounded(PanelOutputImage, 0.02F, 10, p->ColorPanel);
+                DrawRectangleRounded(PanelOutputImage, 0.025F, 10, p->ColorPanel);
 
                 // PanelOutputImage
                 {
                     p->flexible_panel_output = FlexibleRectangle(PanelOutputImage, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
                     // RenderTextureArea
-                    Rectangle FHD{ 0, 0, 1920, 1080 };
-                    Rectangle flexArea = FlexibleRectangle(FHD, p->flexible_panel_input.width, p->flexible_panel_input.height);
+                    Rectangle TextureLiveSize{ 0, 0, 1920, 1080 };
+                    if (p->g_resolution > 2) {
+                        TextureLiveSize = {
+                            0, 0,
+                            TextureLiveSize.width * (p->g_resolution - 1),
+                            TextureLiveSize.height * (p->g_resolution - 1)
+                        };
+                    }
+                    Rectangle flexArea = FlexibleRectangle(TextureLiveSize, p->flexible_panel_input.width, p->flexible_panel_input.height);
 
                     p->flexible_panel_crop = {
                         p->flexible_panel_output.x,
@@ -1120,12 +1128,12 @@ void UpdateDraw()
                         p->flexible_panel_output.height + 0,
                     };
 
-                    float pad = 2;
+                    float pad = 7.0F;
                     Rectangle pixelDrawArea = {
-                        p->flexible_panel_output.x + (pad * 1),
-                        p->flexible_panel_output.y + (pad * 1),
-                        p->flexible_panel_output.width - (pad * 2),
-                        p->flexible_panel_output.height - (pad * 2),
+                        (float)(int)p->flexible_panel_output.x + (pad * 1),
+                        (float)(int)p->flexible_panel_output.y + (pad * 1),
+                        (float)(int)p->flexible_panel_output.width - (pad * 2),
+                        (float)(int)p->flexible_panel_output.height - (pad * 2),
                     };
 
                     // NEW
@@ -1141,11 +1149,12 @@ void UpdateDraw()
                             cameraSetup = true;
                         }
 
+                        pad = 4.0F;
                         Rectangle newPixelDrawArea = {
-                            pad,
-                            pad,
-                            (float)(int)(flexArea.width * 1),
-                            (float)(int)(flexArea.height * 1)
+                            (pad * 1),
+                            (pad * 1),
+                            (flexArea.width - (pad * 2)),
+                            (flexArea.height - (pad * 2))
                         };
 
                         if (p->redrawTexture) {
@@ -1161,10 +1170,10 @@ void UpdateDraw()
                         };
 
                         Rectangle dest{
-                            (float)(int)pixelDrawArea.x,
-                            (float)(int)pixelDrawArea.y,
-                            (float)(int)pixelDrawArea.width,
-                            (float)(int)pixelDrawArea.height,
+                            pixelDrawArea.x,
+                            pixelDrawArea.y,
+                            pixelDrawArea.width,
+                            pixelDrawArea.height,
                         };
                         //DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
 
@@ -1173,6 +1182,7 @@ void UpdateDraw()
 
                         // Camera setup, to be run once
                         if (cameraSetup) {
+
                             p->cameraLiveView.target = Vector2{
                                 p->textureLiveViewSSAA.width / 2.0F,
                                 p->textureLiveViewSSAA.height / 2.0F
@@ -1184,7 +1194,7 @@ void UpdateDraw()
                             };
 
                             p->cameraLiveView.rotation = 0.0F;
-                            p->cameraLiveView.zoom = 1.0F;  // Initial zoom
+                            p->cameraLiveView.zoom = 1.0F;      // Initial zoom
 
                             cameraSetup = false;
                         }
@@ -1195,20 +1205,12 @@ void UpdateDraw()
                             float wheel = GetMouseWheelMove();
 
                             if (wheel != 0) {
-                                p->cameraLiveView.zoom -= (wheel * zoomSpeed);
-                                p->cameraLiveView.zoom = Clamp(p->cameraLiveView.zoom, 0.1F, 4.0F);
-
-                                // Adjust target to ensure zooming is centered on the cursor
-                                Vector2 mouseWorldPos = GetScreenToWorld2D(p->mousePosition, p->cameraLiveView);
-
-                                Vector2 afterZoomWorldPos = GetScreenToWorld2D(p->mousePosition, p->cameraLiveView);
-                                Vector2 zoomDelta = Vector2Subtract(mouseWorldPos, afterZoomWorldPos);
-                                p->cameraLiveView.target = Vector2Add(p->cameraLiveView.target, zoomDelta);
+                                p->cameraLiveView.zoom += (wheel * zoomSpeed * 1.3F);
+                                p->cameraLiveView.zoom = Clamp(p->cameraLiveView.zoom, 0.2F, 4.0F);
                             }
 
                             if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
-                                //Vector2 mouseDelta = GetScreenToWorld2D(GetMouseDelta(), p->cameraLiveView);
-                                Vector2 mouseDelta = GetMouseDelta();
+                                Vector2 mouseDelta = GetMouseDelta(); 
                                 p->cameraLiveView.target.x += mouseDelta.x / p->cameraLiveView.zoom;
                                 p->cameraLiveView.target.y += mouseDelta.y / p->cameraLiveView.zoom;
                             }
@@ -1216,44 +1218,62 @@ void UpdateDraw()
 
                         // Use GetScreenToWorld2D to calculate the correct world space position for the destination rectangle
                         Vector2 topLeft = GetScreenToWorld2D(
-                            Vector2{ (float)pixelDrawArea.x, (float)pixelDrawArea.y }, 
+                            Vector2{ 
+                                (float)pixelDrawArea.x,
+                                (float)pixelDrawArea.y
+                            },
                             p->cameraLiveView
                         );
-
+                        
                         Vector2 bottomRight = GetScreenToWorld2D(
                             Vector2{ 
-                                (float)(pixelDrawArea.x + pixelDrawArea.width), 
+                                (float)(pixelDrawArea.x + pixelDrawArea.width),
                                 (float)(pixelDrawArea.y + pixelDrawArea.height)
-                            }, 
+                            },
                             p->cameraLiveView
                         );
 
-                        // Adjust destination rectangle using the transformed coordinates
+                        // Apply panning and zoom manually
                         dest = {
-                            topLeft.x,
-                            topLeft.y,
-                            bottomRight.x - topLeft.x,  // Width of the destination rectangle
-                            bottomRight.y - topLeft.y   // Height of the destination rectangle
+                            (float)(int)(p->cameraLiveView.target.x - (newPixelDrawArea.width / 2.0f) * p->cameraLiveView.zoom),
+                            (float)(int)(p->cameraLiveView.target.y - (newPixelDrawArea.height / 2.0f) * p->cameraLiveView.zoom),
+                            (float)(int)(newPixelDrawArea.width * p->cameraLiveView.zoom),  // Width of the rectangle with zoom applied
+                            (float)(int)(newPixelDrawArea.height * p->cameraLiveView.zoom)   // Height of the rectangle with zoom applied
                         };
+                         
+                        // Adjust destination rectangle using the transformed coordinates
+                        //if (p->cameraLiveView.zoom == 1.0F) {
+                        //    dest = {
+                        //        (float)(int)(topLeft.x),
+                        //        (float)(int)(topLeft.y),
+                        //        (float)(int)(bottomRight.x - topLeft.x)* p->cameraLiveView.zoom,  // Width of the destination rectangle
+                        //        (float)(int)(bottomRight.y - topLeft.y)* p->cameraLiveView.zoom   // Height of the destination rectangle
+                        //    };
+                        //}
+                        EndMode2D();
 
-                        
                         // Apply Scissor Mode to constrain the drawing to the panel area
-                        int pad = 0;
+                        int pad = 4;
                         BeginScissorMode(
-                            PanelOutputImage.x + (pad * 1), 
-                            PanelOutputImage.y + (pad * 1),
-                            PanelOutputImage.width - (pad * 2),
-                            PanelOutputImage.height - (pad * 2)
+                            (int)PanelOutputImage.x + (pad * 1), 
+                            (int)PanelOutputImage.y + (pad * 1),
+                            (int)PanelOutputImage.width - (pad * 2),
+                            (int)PanelOutputImage.height - (pad * 2)
                         );
 
                         // Draw the texture with zoom and panning applied
-
-                        EndMode2D();
-
                         DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0, 0 }, 0, WHITE);
                         EndScissorMode();
-
                     }
+                    
+                    pad = 5.0F;
+                    Rectangle PanelOutputFrame{
+                        PanelOutputImage.x + (pad * 1),
+                        PanelOutputImage.y + (pad * 1),
+                        PanelOutputImage.width - (pad * 2),
+                        PanelOutputImage.height - (pad * 2),
+                    };
+                    DrawRectangleRoundedLines(PanelOutputFrame, 0.009F, 10, pad, { 20,23,25,255 });
                 }
 
                 Rectangle FooterSection{
@@ -1386,7 +1406,12 @@ void redrawRenderTexture(Rectangle& DrawArea)
                 tiles_h
             };
 
-            float pad = p->g_space * 0.5F * 1 * SSAA;
+            //float pad = p->g_space * 0.5F * SSAA;
+
+            float pad{};
+            if (p->g_resolution == 1) pad = p->g_space * 0.5F * SSAA;
+            else pad = p->g_space * 0.5F * SSAA * (p->g_resolution - 1);
+
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
                 (float)(int)(tiles.x + (pad * 1)),
