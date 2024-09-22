@@ -1185,7 +1185,6 @@ void UpdateDraw()
                             p->cameraSetup = false;
                         }
 
-                        //if (CheckCollisionPointRec(GetScreenToWorld2D(p->mousePosition, p->cameraLiveView), PanelOutputImage)) {
                         if (CheckCollisionPointRec(p->mousePosition, PanelOutputImage)) {
                             float zoomSpeed = 0.035F;
                             float wheel = GetMouseWheelMove();
@@ -1198,8 +1197,8 @@ void UpdateDraw()
                             // Panning
                             if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
                                 Vector2 mouseDelta = GetMouseDelta(); 
-                                p->cameraView.target.x += (mouseDelta.x * p->cameraView.zoom);
-                                p->cameraView.target.y += (mouseDelta.y * p->cameraView.zoom);
+                                p->cameraView.target.x += (mouseDelta.x);
+                                p->cameraView.target.y += (mouseDelta.y);
                             }
                         }
 
