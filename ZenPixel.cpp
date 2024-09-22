@@ -315,7 +315,7 @@ struct Plug {
     Rectangle flexible_panel_input{};
     Rectangle flexible_panel_output{};
     Rectangle flexible_panel_crop{};
-    bool reload_setup{ true };
+    bool reload_setup{ false };
     ImageSize flexibleSize{};
     std::vector<std::vector<Color>> ImagePixels{};
     std::vector<std::string> setupParameter{ "NUMBERING", "NUMBER", "SPACE", "CORNER", "PIXEL RANGE", "TITLE", "RESOLUTION", "FORMAT" };
@@ -345,6 +345,7 @@ struct Plug {
     Texture2D textureLiveViewSSAA{};
 
     Camera2D cameraView{};
+    bool cameraSetup{ false };
 };
 
 Plug ZenPlug{};
@@ -770,6 +771,7 @@ void UpdateDraw()
                         LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
                         p->reload_setup = false;
                         p->redrawTexture = true;
+                        p->cameraSetup = true;
                     }
 
                     if (p->texture_input.height != 0) {
@@ -882,7 +884,6 @@ void UpdateDraw()
                                             }
                                             ObjectButtonNumbering.chooseThisButton();
                                             p->redrawTexture = true;
-                                            p->reload_setup = true;
                                         }
                                     }
                                     else {
@@ -928,7 +929,6 @@ void UpdateDraw()
                                             }
                                             ObjectButtonNumber.chooseThisButton();
                                             p->redrawTexture = true;
-                                            p->reload_setup = true;
                                         }
                                     }
                                     else {
@@ -957,11 +957,7 @@ void UpdateDraw()
                                     if (newVal != oldVal) {
                                         p->g_space = newVal;
                                         oldVal = newVal;
-                                        p->reload_setup = true;
                                         p->redrawTexture = true;
-                                    }
-                                    else {
-                                        p->reload_setup = false;
                                     }
                                 }
 
@@ -978,11 +974,7 @@ void UpdateDraw()
                                     if (newVal != oldVal) {
                                         p->g_corner = newVal;
                                         oldVal = newVal;
-                                        p->reload_setup = true;
                                         p->redrawTexture = true;
-                                    }
-                                    else {
-                                        p->reload_setup = false;
                                     }
                                 }
 
@@ -1001,9 +993,6 @@ void UpdateDraw()
                                         oldVal = newVal;
                                         p->reload_setup = true;
                                         p->redrawTexture = true;
-                                    }
-                                    else {
-                                        p->reload_setup = false;
                                     }
                                 }
                             }
@@ -1032,6 +1021,7 @@ void UpdateDraw()
                                         p->g_resolution = newVal;
                                         oldVal = newVal;
                                         p->redrawTexture = true;
+                                        p->reload_setup = true;
                                     }
                                 }
                             }
@@ -1139,27 +1129,10 @@ void UpdateDraw()
                     // NEW
                     if (p->texture_input.height != 0) {
 
-                        Rectangle newFlexible = flexArea;
-                        static Rectangle oldFlexible = newFlexible;
-                        static bool cameraSetup = true;
-
                         // TODO: 
                         // 1. Make system to reset cameraView when reloading new image.
                         // 2. Make system to not reset cameraView when changing resolution.
                         //
-
-                        if ((newFlexible.height != oldFlexible.height) || (newFlexible.width != oldFlexible.width)) {
-                            oldFlexible = newFlexible;
-                            p->reload_setup = true;
-                            cameraSetup = true;
-                        }
-
-                        //int newResolution = p->g_resolution;
-                        //static int oldResolution = p->g_resolution;
-                        //if (newResolution != oldResolution) {
-                        //    oldResolution = newResolution;
-                        //    cameraSetup = true;
-                        //}
 
                         pad = 4.0F;
                         Rectangle newPixelDrawArea = {
@@ -1172,6 +1145,7 @@ void UpdateDraw()
                         if (p->redrawTexture) {
                             redrawRenderTexture(newPixelDrawArea);
                             p->redrawTexture = false;
+
                         }
 
                         Rectangle source{
@@ -1193,7 +1167,7 @@ void UpdateDraw()
                         BeginMode2D(p->cameraView);
 
                         // Camera setup, to be run once
-                        if (cameraSetup) {
+                        if (p->cameraSetup) {
 
                             p->cameraView.offset = Vector2{
                                 p->textureLiveViewSSAA.width / 2.0F,
@@ -1208,7 +1182,7 @@ void UpdateDraw()
                             p->cameraView.rotation = 0.0F;
                             p->cameraView.zoom = 1.0F;      // Initial zoom
 
-                            cameraSetup = false;
+                            p->cameraSetup = false;
                         }
 
                         //if (CheckCollisionPointRec(GetScreenToWorld2D(p->mousePosition, p->cameraLiveView), PanelOutputImage)) {
@@ -1389,11 +1363,9 @@ void redrawRenderTexture(Rectangle& DrawArea)
         firstSetup = false;
     }
 
-    if (p->reload_setup) {
-        if (p->renderTextureLiveView.texture.height != 0) {
-            UnloadRenderTexture(p->renderTextureLiveView);
-            p->renderTextureLiveView = LoadRenderTexture((int)liveViewArea.width, (int)liveViewArea.height);
-        }
+    if (p->renderTextureLiveView.texture.height != 0) {
+        UnloadRenderTexture(p->renderTextureLiveView);
+        p->renderTextureLiveView = LoadRenderTexture((int)liveViewArea.width, (int)liveViewArea.height);
     }
 
     BeginTextureMode(p->renderTextureLiveView);
@@ -1411,8 +1383,6 @@ void redrawRenderTexture(Rectangle& DrawArea)
                 tiles_w,
                 tiles_h
             };
-
-            //float pad = p->g_space * 0.5F * SSAA;
 
             float pad{};
             if (p->g_resolution == 1) pad = p->g_space * 0.5F * SSAA;
