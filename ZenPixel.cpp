@@ -344,7 +344,7 @@ struct Plug {
     RenderTexture2D renderTextureLiveView{};
     Texture2D textureLiveViewSSAA{};
 
-    Camera2D cameraLiveView{};
+    Camera2D cameraView{};
 };
 
 Plug ZenPlug{};
@@ -1143,11 +1143,23 @@ void UpdateDraw()
                         static Rectangle oldFlexible = newFlexible;
                         static bool cameraSetup = true;
 
+                        // TODO: 
+                        // 1. Make system to reset cameraView when reloading new image.
+                        // 2. Make system to not reset cameraView when changing resolution.
+                        //
+
                         if ((newFlexible.height != oldFlexible.height) || (newFlexible.width != oldFlexible.width)) {
                             oldFlexible = newFlexible;
                             p->reload_setup = true;
                             cameraSetup = true;
                         }
+
+                        //int newResolution = p->g_resolution;
+                        //static int oldResolution = p->g_resolution;
+                        //if (newResolution != oldResolution) {
+                        //    oldResolution = newResolution;
+                        //    cameraSetup = true;
+                        //}
 
                         pad = 4.0F;
                         Rectangle newPixelDrawArea = {
@@ -1178,23 +1190,23 @@ void UpdateDraw()
                         //DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
 
                         
-                        BeginMode2D(p->cameraLiveView);
+                        BeginMode2D(p->cameraView);
 
                         // Camera setup, to be run once
                         if (cameraSetup) {
 
-                            p->cameraLiveView.target = Vector2{
+                            p->cameraView.offset = Vector2{
                                 p->textureLiveViewSSAA.width / 2.0F,
                                 p->textureLiveViewSSAA.height / 2.0F
                             };
 
-                            p->cameraLiveView.offset = Vector2{
-                                p->textureLiveViewSSAA.width / 2.0F,
-                                p->textureLiveViewSSAA.height / 2.0F
+                            p->cameraView.target = Vector2{
+                                pixelDrawArea.x + pixelDrawArea.width / 2.0F,
+                                pixelDrawArea.y + pixelDrawArea.height / 2.0F
                             };
 
-                            p->cameraLiveView.rotation = 0.0F;
-                            p->cameraLiveView.zoom = 1.0F;      // Initial zoom
+                            p->cameraView.rotation = 0.0F;
+                            p->cameraView.zoom = 1.0F;      // Initial zoom
 
                             cameraSetup = false;
                         }
@@ -1205,14 +1217,15 @@ void UpdateDraw()
                             float wheel = GetMouseWheelMove();
 
                             if (wheel != 0) {
-                                p->cameraLiveView.zoom += (wheel * zoomSpeed * 1.3F);
-                                p->cameraLiveView.zoom = Clamp(p->cameraLiveView.zoom, 0.2F, 4.0F);
+                                p->cameraView.zoom += (wheel * zoomSpeed * 1.3F);
+                                p->cameraView.zoom = Clamp(p->cameraView.zoom, 0.5F, 5.0F);
                             }
 
+                            // Panning
                             if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
                                 Vector2 mouseDelta = GetMouseDelta(); 
-                                p->cameraLiveView.target.x += mouseDelta.x / p->cameraLiveView.zoom;
-                                p->cameraLiveView.target.y += mouseDelta.y / p->cameraLiveView.zoom;
+                                p->cameraView.target.x += (mouseDelta.x * p->cameraView.zoom);
+                                p->cameraView.target.y += (mouseDelta.y * p->cameraView.zoom);
                             }
                         }
 
@@ -1222,7 +1235,7 @@ void UpdateDraw()
                                 (float)pixelDrawArea.x,
                                 (float)pixelDrawArea.y
                             },
-                            p->cameraLiveView
+                            p->cameraView
                         );
                         
                         Vector2 bottomRight = GetScreenToWorld2D(
@@ -1230,26 +1243,19 @@ void UpdateDraw()
                                 (float)(pixelDrawArea.x + pixelDrawArea.width),
                                 (float)(pixelDrawArea.y + pixelDrawArea.height)
                             },
-                            p->cameraLiveView
+                            p->cameraView
                         );
 
                         // Apply panning and zoom manually
+                        Vector2 xyPos = GetScreenToWorld2D({ pixelDrawArea.x, pixelDrawArea.y }, p->cameraView);
+
                         dest = {
-                            (float)(int)(p->cameraLiveView.target.x - (newPixelDrawArea.width / 2.0f) * p->cameraLiveView.zoom),
-                            (float)(int)(p->cameraLiveView.target.y - (newPixelDrawArea.height / 2.0f) * p->cameraLiveView.zoom),
-                            (float)(int)(newPixelDrawArea.width * p->cameraLiveView.zoom),  // Width of the rectangle with zoom applied
-                            (float)(int)(newPixelDrawArea.height * p->cameraLiveView.zoom)   // Height of the rectangle with zoom applied
+                            (float)(p->cameraView.target.x - (pixelDrawArea.width / 2.0F) * p->cameraView.zoom),
+                            (float)(p->cameraView.target.y - (pixelDrawArea.height / 2.0F) * p->cameraView.zoom),
+                            (float)(int)(pixelDrawArea.width * p->cameraView.zoom),  // Width of the rectangle with zoom applied
+                            (float)(int)(pixelDrawArea.height * p->cameraView.zoom)   // Height of the rectangle with zoom applied
                         };
-                         
-                        // Adjust destination rectangle using the transformed coordinates
-                        //if (p->cameraLiveView.zoom == 1.0F) {
-                        //    dest = {
-                        //        (float)(int)(topLeft.x),
-                        //        (float)(int)(topLeft.y),
-                        //        (float)(int)(bottomRight.x - topLeft.x)* p->cameraLiveView.zoom,  // Width of the destination rectangle
-                        //        (float)(int)(bottomRight.y - topLeft.y)* p->cameraLiveView.zoom   // Height of the destination rectangle
-                        //    };
-                        //}
+
                         EndMode2D();
 
                         // Apply Scissor Mode to constrain the drawing to the panel area
