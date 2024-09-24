@@ -47,7 +47,9 @@ struct SliderInput {
     SliderInput(Rectangle area, float initialValue, float minValue, float maxValue, bool dragging) :
         area(area), value(initialValue), minValue(minValue), maxValue(maxValue), dragging(dragging) 
     {
-        float smallRectWidthCoef = 0.225F;
+        float smallRectWidthCoef = 0.235F;
+        float spaceRect = 0.04F;
+
         minValRect = {
             area.x,
             area.y,
@@ -56,14 +58,14 @@ struct SliderInput {
         };
 
         sliderBarRect = {
-            minValRect.x + minValRect.width,
+            minValRect.x + minValRect.width + (area.width * spaceRect),
             area.y,
-            area.width * (1.0F - (2 * smallRectWidthCoef)),
+            area.width* (1.0F - (2 * (smallRectWidthCoef + spaceRect))),
             area.height
         };
 
         maxValRect = {
-            sliderBarRect.x + sliderBarRect.width,
+            sliderBarRect.x + sliderBarRect.width + (area.width * spaceRect),
             area.y,
             area.width * smallRectWidthCoef,
             area.height
@@ -99,9 +101,11 @@ struct SliderInput {
     void Draw() {
         float fontSize = 0.8F;
         //DrawRectangleRoundedLines(minValRect, 0.2F, 10, 0.5F, WHITE);
+        //DrawRectangleRounded(minValRect, 0.2F, 10, BLACK);
         DrawTextCustom(minValRect, std::to_string((int)minValue), 1, fontSize, 0, WHITE);
 
         //DrawRectangleRoundedLines(maxValRect, 0.2F, 10, 0.5F, WHITE);
+        //DrawRectangleRounded(maxValRect, 0.2F, 10, BLACK);
         DrawTextCustom(maxValRect, std::to_string((int)maxValue), 1, fontSize, 0, WHITE);
 
         float handleX = sliderBarRect.x + ((value - minValue) / (maxValue - minValue)) * sliderBarRect.width;
@@ -293,7 +297,7 @@ enum Notification {
 };
 
 struct Plug {
-    std::string AppTitle{ "ZEN PIXEL" };
+    std::string AppTitle{ "Zen Pixel" };
     RectSize Screen{};
     Vector2 mousePosition{};
     //Color ColorLayer1    { 40,40,40, 90 };
@@ -346,6 +350,8 @@ struct Plug {
 
     Camera2D cameraView{};
     bool cameraSetup{ false };
+
+    Rectangle DebugCamera{};
 };
 
 Plug ZenPlug{};
@@ -362,6 +368,7 @@ void InitializedIcons(void);
 void DrawTextCustom(Rectangle& panel, std::string text, int align, float size, float space, const Font& font, const Color color);
 void LoadSetup(int new_width, int new_height);
 void UpdateDraw();
+std::vector<std::string> ExtractRectValue(std::string header, Rectangle& PanelOutputImage);
 void redrawRenderTexture(Rectangle& DrawArea);
 ImageSize CalculateFlexibleImage();
 Rectangle FlexibleRectangle(Rectangle& BaseRect, float ObjectWidth, float ObjectHeight);
@@ -707,6 +714,8 @@ void UpdateDraw()
                 //DrawRectangleLinesEx(PanelInputImage, 0.5F, WHITE);
                 DrawRectangleRounded(PanelInputImage, 0.05F, 10, p->ColorPanel);
 
+                p->DebugCamera = PanelInputImage;
+
                 // PanelInputImage
                 {
                     // DRAGDROP INFORMATION
@@ -768,7 +777,9 @@ void UpdateDraw()
 
                     // DRAW INPUT TEXTURE
                     if (p->reload_setup) {
-                        LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
+                        if (p->ImageInput.height != 0) {
+                            LoadSetup((int)p->flexibleSize.w, (int)p->flexibleSize.h);
+                        }
                         p->reload_setup = false;
                         p->redrawTexture = true;
                         p->cameraSetup = true;
@@ -1021,7 +1032,7 @@ void UpdateDraw()
                                         p->g_resolution = newVal;
                                         oldVal = newVal;
                                         p->redrawTexture = true;
-                                        p->reload_setup = true;
+                                        //p->reload_setup = true;
                                     }
                                 }
                             }
@@ -1152,7 +1163,7 @@ void UpdateDraw()
                             0,
                             0,
                             newPixelDrawArea.width,
-                            -newPixelDrawArea.height 
+                            -newPixelDrawArea.height
                         };
 
                         Rectangle dest{
@@ -1163,7 +1174,7 @@ void UpdateDraw()
                         };
                         //DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0 }, 0, WHITE);
 
-                        
+
                         BeginMode2D(p->cameraView);
 
                         // Camera setup, to be run once
@@ -1177,6 +1188,8 @@ void UpdateDraw()
                             p->cameraView.target = Vector2{
                                 pixelDrawArea.x + pixelDrawArea.width / 2.0F,
                                 pixelDrawArea.y + pixelDrawArea.height / 2.0F
+                                //PanelOutputImage.x + PanelOutputImage.width / 2.0F,
+                                //PanelOutputImage.y + PanelOutputImage.height / 2.0F
                             };
 
                             p->cameraView.rotation = 0.0F;
@@ -1185,56 +1198,163 @@ void UpdateDraw()
                             p->cameraSetup = false;
                         }
 
+                        dest = {
+                            (float)(int)(p->cameraView.target.x - (pixelDrawArea.width / 2.0F) * p->cameraView.zoom),
+                            (float)(int)(p->cameraView.target.y - (pixelDrawArea.height / 2.0F) * p->cameraView.zoom),
+                            (float)(int)(pixelDrawArea.width * p->cameraView.zoom) - 1,  // Width of the rectangle with zoom applied
+                            (float)(int)(pixelDrawArea.height * p->cameraView.zoom) - 1   // Height of the rectangle with zoom applied
+                        };
+
+                        pad = 7.0F;
                         if (CheckCollisionPointRec(p->mousePosition, PanelOutputImage)) {
-                            float zoomSpeed = 0.035F;
+                            //SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+                            float zoomSpeed = 0.05F;
+                            float zoom = p->cameraView.zoom;
                             float wheel = GetMouseWheelMove();
 
                             if (wheel != 0) {
-                                p->cameraView.zoom += (wheel * zoomSpeed * 1.3F);
-                                p->cameraView.zoom = Clamp(p->cameraView.zoom, 0.5F, 5.0F);
+                                p->cameraView.zoom = zoom + (wheel * zoomSpeed * zoom);
+                                p->cameraView.zoom = Clamp(p->cameraView.zoom, 0.75F, 15.F);
                             }
 
+                            // TODO:
+                            // 1. Make panning looks and feels like windows image viewer. 
+                            //    Only can be pann if the image show size is bigger than area of show.
+                            //
+                            // So before doing that, should be draw debug information of rectangle panelOutputImage and dest, 
+                            // to make it easier to do that mission
+                            //
+                             
                             // Panning
+                            Rectangle viewAreaClean = {
+                                PanelOutputImage.x + (pad * 1),
+                                PanelOutputImage.y + (pad * 1),
+                                PanelOutputImage.width - (pad * 2),
+                                PanelOutputImage.height - (pad * 2),
+                            };
+                            
                             if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
-                                Vector2 mouseDelta = GetMouseDelta(); 
-                                p->cameraView.target.x += (mouseDelta.x);
-                                p->cameraView.target.y += (mouseDelta.y);
+                                Vector2 mouseDelta = GetMouseDelta();
+                                //pad = 4;
+
+                                //if (dest.width > PanelOutputImage.width && dest.height > PanelOutputImage.height) {
+                                //    p->cameraView.target.x += mouseDelta.x;
+                                //    p->cameraView.target.y += mouseDelta.y;
+                                //}
+                                //else if (dest.width > PanelOutputImage.width) {
+                                //    p->cameraView.target.x += mouseDelta.x;
+                                //}
+                                //else if (dest.height > PanelOutputImage.height) {
+                                //    p->cameraView.target.y += mouseDelta.y;
+                                //}
+                                
+                                p->cameraView.target.x += mouseDelta.x;
+                                p->cameraView.target.y += mouseDelta.y;
+
+                                //dest.x += mouseDelta.x;
+                                //dest.y += mouseDelta.y;
+
+                                
+
+                                //dest.x = Clamp(dest.x, (PanelOutputImage.x - (dest.width - PanelOutputImage.width + 10)), PanelOutputImage.x + 10);
+                                //dest.y = Clamp(dest.y, (PanelOutputImage.y - (dest.height - PanelOutputImage.height + 10)), PanelOutputImage.y + 10);
+
+                                //p->cameraView.target.y = Clamp(
+                                //    p->cameraView.target.y,
+                                //    (PanelOutputImage.y + PanelOutputImage.height / 2.0F * p->cameraView.zoom) - (dest.width - PanelOutputImage.width + 10),
+                                //    (PanelOutputImage.y + PanelOutputImage.height / 2.0F * p->cameraView.zoom) + 10
+                                //);
+
+                                //p->cameraView.target.y = Clamp(
+                                //    p->cameraView.target.y,
+                                //    (float)(int)((viewAreaClean.y + viewAreaClean.height / 2.0F * p->cameraView.zoom) - (dest.height - viewAreaClean.height) + (pad * 2)),
+                                //    (float)(int)((viewAreaClean.y + viewAreaClean.height / 2.0F * p->cameraView.zoom) + (pad * 1))
+                                //);
+
+                                //p->cameraView.target.y = Clamp(
+                                //    p->cameraView.target.y,
+                                //    (float)(int)((viewAreaClean.y + viewAreaClean.height / 2.0F * p->cameraView.zoom) - (dest.height - viewAreaClean.height/2.0F) + (pad * 2)),
+                                //    (float)(int)((viewAreaClean.y + viewAreaClean.height / 2.0F * p->cameraView.zoom) + (pad * 1))
+                                //);
+                                
+                                // Calculate the min and max Y clamp bounds
+                                //float halfHeight = viewAreaClean.height / 2.0F;
+                                //float minY = (viewAreaClean.y + halfHeight * p->cameraView.zoom) - (dest.height - viewAreaClean.height / 2.0F);
+                                //float maxY = (viewAreaClean.y + halfHeight * p->cameraView.zoom);
+
+                                // Clamp camera target Y within calculated bounds
+                                //p->cameraView.target.y = Clamp(p->cameraView.target.y, 0 + pad, maxY - pad);
+
+                                //if (dest.width > viewAreaClean.width) {
+                                //    dest.x += mouseDelta.x;
+                                //}
+
+                                //if (dest.height > viewAreaClean.height) {
+                                //    dest.y += mouseDelta.y;
+                                //}
+
+                                //// Clamp dest position
+                                //dest.x = Clamp(
+                                //    dest.x,
+                                //    viewAreaClean.x - (dest.width - viewAreaClean.width + pad * 2), // Min value
+                                //    viewAreaClean.x + pad * 1                                      // Max value
+                                //);
+
+                                //dest.y = Clamp(
+                                //    dest.y,
+                                //    viewAreaClean.y - (dest.height - viewAreaClean.height + pad * 2), // Min value
+                                //    viewAreaClean.y + pad * 1                                        // Max value
+                                //);
+
                             }
                         }
+                        //else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
 
-                        // Use GetScreenToWorld2D to calculate the correct world space position for the destination rectangle
-                        Vector2 topLeft = GetScreenToWorld2D(
-                            Vector2{ 
-                                (float)pixelDrawArea.x,
-                                (float)pixelDrawArea.y
-                            },
-                            p->cameraView
-                        );
+
                         
-                        Vector2 bottomRight = GetScreenToWorld2D(
-                            Vector2{ 
-                                (float)(pixelDrawArea.x + pixelDrawArea.width),
-                                (float)(pixelDrawArea.y + pixelDrawArea.height)
-                            },
-                            p->cameraView
-                        );
-
-                        // Apply panning and zoom manually
-                        Vector2 xyPos = GetScreenToWorld2D({ pixelDrawArea.x, pixelDrawArea.y }, p->cameraView);
-
-                        dest = {
-                            (float)(p->cameraView.target.x - (pixelDrawArea.width / 2.0F) * p->cameraView.zoom),
-                            (float)(p->cameraView.target.y - (pixelDrawArea.height / 2.0F) * p->cameraView.zoom),
-                            (float)(int)(pixelDrawArea.width * p->cameraView.zoom),  // Width of the rectangle with zoom applied
-                            (float)(int)(pixelDrawArea.height * p->cameraView.zoom)   // Height of the rectangle with zoom applied
-                        };
-
                         EndMode2D();
 
+                        dest.x = (float)(int)Clamp(dest.x, PanelOutputImage.x - (dest.width - PanelOutputImage.width + (pad * 1.5F)), PanelOutputImage.x + (pad * 1.25F));
+                        dest.y = (float)(int)Clamp(dest.y, PanelOutputImage.y - (dest.height - PanelOutputImage.height + (pad * 1.5F)), PanelOutputImage.y + (pad * 1.25F));
+
+                        if (dest.width < PanelOutputImage.width && dest.height < PanelOutputImage.height) {
+                            // CENTER IN XY
+                            //p->cameraView.target = Vector2{
+                            //    pixelDrawArea.x + pixelDrawArea.width / 2.0F,
+                            //    pixelDrawArea.y + pixelDrawArea.height / 2.0F
+                            //};
+                            dest.x = PanelOutputImage.x + ((PanelOutputImage.width - dest.width) / 2.0F);
+                            dest.y = PanelOutputImage.y + ((PanelOutputImage.height - dest.height) / 2.0F);
+
+                            //dest = {
+                            //    PanelOutputImage.x + ((PanelOutputImage.width - dest.width) / 2.0F),
+                            //    PanelOutputImage.y + ((PanelOutputImage.height - dest.height) / 2.0F),
+                            //    dest.width,
+                            //    dest.height
+                            //};
+
+                        }
+                        else if (dest.width < PanelOutputImage.width) {
+                            // CENTER IN X
+                            //p->cameraView.target.x = pixelDrawArea.x + pixelDrawArea.width / 2.0F;
+
+                            dest.x = PanelOutputImage.x + ((PanelOutputImage.width - dest.width) / 2.0F);
+                        }
+                        else if (dest.height < PanelOutputImage.height) {
+                            // CENTER IN Y
+                            //p->cameraView.target.y = pixelDrawArea.y + pixelDrawArea.height / 2.0F;
+                            
+                            dest.y = PanelOutputImage.y + ((PanelOutputImage.height - dest.height) / 2.0F);
+                        }
+
+
+                        
+
+
                         // Apply Scissor Mode to constrain the drawing to the panel area
-                        int pad = 4;
+                        int pad = 5;
                         BeginScissorMode(
-                            (int)PanelOutputImage.x + (pad * 1), 
+                            (int)PanelOutputImage.x + (pad * 1),
                             (int)PanelOutputImage.y + (pad * 1),
                             (int)PanelOutputImage.width - (pad * 2),
                             (int)PanelOutputImage.height - (pad * 2)
@@ -1243,16 +1363,138 @@ void UpdateDraw()
                         // Draw the texture with zoom and panning applied
                         DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0, 0 }, 0, WHITE);
                         EndScissorMode();
+
+                        // FOR DEBUGGING PANNING CAMERA DESTINATION POSITION
+                        if (1)
+                        {
+                            static bool openDebug = true;
+
+                            if (CheckCollisionPointRec(p->mousePosition, p->DebugCamera)) {
+                                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                                    openDebug = !openDebug;
+                                }
+                            }
+
+                            if (openDebug) {
+                                DrawRectangleRounded(p->DebugCamera, 0.05F, 10, MAROON);
+
+                                float pad = 4.0F;
+                                Rectangle debug{
+                                    p->DebugCamera.x + (pad * 1 * 1),
+                                    p->DebugCamera.y + (pad * 1 * 1),
+                                    p->DebugCamera.width - (pad * 1 * 2),
+                                    p->DebugCamera.height - (pad * 1 * 2)
+                                };
+
+                                std::vector<std::string> debugParams{ "RECT", "X", "Y", "W", "H" };
+
+                                float w_area = debug.width / 3;
+                                for (size_t i = 0; i < 3; i++) {
+
+                                    Rectangle parameter{
+                                        debug.x + (i * debug.width / 3),
+                                        debug.y,
+                                        debug.width / 3,
+                                        debug.height,
+                                    };
+                                    pad = 4.0F;
+
+                                    parameter = {
+                                        parameter.x + (pad * 1),
+                                        parameter.y + (pad * 1),
+                                        parameter.width - (pad * 2),
+                                        parameter.height - (pad * 2)
+                                    };
+                                    DrawRectangleRounded(parameter, 0.15F, 10, {25,25,28,255});
+
+                                    pad = 2.0F;
+                                    Rectangle paramRect{
+                                        parameter.x + (pad * 1),
+                                        parameter.y + (pad * 1),
+                                        parameter.width - (pad * 2),
+                                        parameter.height - (pad * 2)
+                                    };
+
+                                    if (i == 0) {
+
+                                        for (size_t j = 0; j < debugParams.size(); j++) {
+                                            Rectangle textRect{
+                                                paramRect.x,
+                                                paramRect.y + (j * paramRect.height / debugParams.size()),
+                                                paramRect.width,
+                                                paramRect.height / debugParams.size()
+                                            };
+
+                                            pad = 2.0F;
+                                            textRect = {
+                                                textRect.x + (pad * 1),
+                                                textRect.y + (pad * 1),
+                                                textRect.width - (pad * 2),
+                                                textRect.height - (pad * 2)
+                                            };
+                                            DrawRectangleRounded(textRect, 0.15F, 10, LIGHTGRAY);
+                                            DrawTextCustom(textRect, debugParams.at(j), CENTER, 0.5F, 1, BLACK);
+                                        }
+                                    }
+                                    else if (i == 1) {
+                                        auto data = ExtractRectValue("AREA", PanelOutputImage);
+
+                                        for (size_t j = 0; j < data.size(); j++) {
+                                            Rectangle textRect{
+                                                paramRect.x,
+                                                paramRect.y + (j * paramRect.height / data.size()),
+                                                paramRect.width,
+                                                paramRect.height / data.size()
+                                            };
+
+                                            pad = 2.0F;
+                                            textRect = {
+                                                textRect.x + (pad * 1),
+                                                textRect.y + (pad * 1),
+                                                textRect.width - (pad * 2),
+                                                textRect.height - (pad * 2)
+                                            };
+                                            DrawRectangleRounded(textRect, 0.15F, 10, LIGHTGRAY);
+                                            DrawTextCustom(textRect, data.at(j), CENTER, 0.5F, 1, BLACK);
+                                        }
+                                    }
+                                    else if (i == 2) {
+                                        auto data = ExtractRectValue("DEST", dest);
+
+                                        for (size_t j = 0; j < data.size(); j++) {
+                                            Rectangle textRect{
+                                                paramRect.x,
+                                                paramRect.y + (j * paramRect.height / data.size()),
+                                                paramRect.width,
+                                                paramRect.height / data.size()
+                                            };
+
+                                            pad = 2.0F;
+                                            textRect = {
+                                                textRect.x + (pad * 1),
+                                                textRect.y + (pad * 1),
+                                                textRect.width - (pad * 2),
+                                                textRect.height - (pad * 2)
+                                            };
+                                            DrawRectangleRounded(textRect, 0.15F, 10, LIGHTGRAY);
+                                            DrawTextCustom(textRect, data.at(j), CENTER, 0.5F, 1, BLACK);
+                                        }
+                                    }
+
+                                }
+                            }
+                        }
+
                     }
                     
-                    pad = 5.0F;
+                    pad = 7.0F;
                     Rectangle PanelOutputFrame{
                         PanelOutputImage.x + (pad * 1),
                         PanelOutputImage.y + (pad * 1),
                         PanelOutputImage.width - (pad * 2),
                         PanelOutputImage.height - (pad * 2),
                     };
-                    DrawRectangleRoundedLines(PanelOutputFrame, 0.009F, 10, pad, { 20,23,25,255 });
+                    DrawRectangleRoundedLines(PanelOutputFrame, 0.005F, 10, pad, { 25,28,30,255 });
                 }
 
                 Rectangle FooterSection{
@@ -1344,6 +1586,19 @@ void UpdateDraw()
     }
 
 
+}
+
+std::vector<std::string> ExtractRectValue(std::string header, Rectangle& PanelOutputImage)
+{
+    std::vector<std::string> vector{
+        header,
+        std::to_string((int)PanelOutputImage.x),
+        std::to_string((int)PanelOutputImage.y),
+        std::to_string((int)PanelOutputImage.width),
+        std::to_string((int)PanelOutputImage.height),
+    };
+
+    return vector;
 }
 
 void redrawRenderTexture(Rectangle& DrawArea)
