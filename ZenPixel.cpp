@@ -1185,14 +1185,27 @@ void UpdateDraw()
                             float zoomSpeed = 0.05F;
                             float zoom = p->liveViewZoom;
                             float wheel = GetMouseWheelMove();
+                            static bool zooming = false;
+                            static float step = 0.0F;
 
+                            // ZOOMMING
                             if (wheel != 0) {
+                                zooming = true;
+                                step += (wheel * 0.35F);
+                            }
+
+                            if (zooming) {
                                 Vector2 mouseBeforeZoom{
                                     (p->mousePosition.x - dest.x) / dest.width,
                                     (p->mousePosition.y - dest.y) / dest.height
                                 };
 
-                                p->liveViewZoom = zoom + (wheel * zoomSpeed * zoom);
+                                // TODO:
+                                // Make the zoom wheel step smoother. not to step.
+                                static float t = 0.0F;
+
+                                float a = Lerp(0, step, t);
+                                p->liveViewZoom = zoom + (a * zoomSpeed * zoom);
                                 p->liveViewZoom = Clamp(p->liveViewZoom, 0.75F, 15.0F);
 
                                 dest.width = pixelDrawArea.width * p->liveViewZoom;
@@ -1201,8 +1214,16 @@ void UpdateDraw()
                                 dest.x = p->mousePosition.x - mouseBeforeZoom.x * dest.width;
                                 dest.y = p->mousePosition.y - mouseBeforeZoom.y * dest.height;
 
+                                t += 0.1F;
+
+                                if (t >= 1.0F) {
+                                    zooming = false;
+                                    step = 0.0F;
+                                    t = 0.0F;
+                                }
                             }
 
+                            // PANNNING
                             if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
                                 Vector2 mouseDelta = GetMouseDelta();
                                 dest.x += mouseDelta.x;
@@ -1210,98 +1231,8 @@ void UpdateDraw()
                             }
                         }
 
-                        if (0)
-                        {
-                            // OLD SOLUTION
-                            // USING CAMERA2D IS HARD, NOT WORK FOR ME NOW. WILL CHANGES TO REGULAR RENDERING TEXTURE.
-                            BeginMode2D(p->cameraView);
-
-                            // Camera setup, to be run once
-                            if (p->cameraSetup) {
-
-                                p->cameraView.offset = Vector2{
-                                    p->textureLiveViewSSAA.width / 2.0F,
-                                    p->textureLiveViewSSAA.height / 2.0F
-                                };
-
-                                p->cameraView.target = Vector2{
-                                    pixelDrawArea.x + pixelDrawArea.width / 2.0F,
-                                    pixelDrawArea.y + pixelDrawArea.height / 2.0F
-                                };
-
-                                p->cameraView.rotation = 0.0F;
-                                p->cameraView.zoom = 1.0F;      // Initial zoom
-
-                                p->cameraSetup = false;
-                            }
-
-                            dest = {
-                                (float)(int)(p->cameraView.target.x - (pixelDrawArea.width / 2.0F) * p->cameraView.zoom),
-                                (float)(int)(p->cameraView.target.y - (pixelDrawArea.height / 2.0F) * p->cameraView.zoom),
-                                (float)(int)(pixelDrawArea.width * p->cameraView.zoom) - 1,  // Width of the rectangle with zoom applied
-                                (float)(int)(pixelDrawArea.height * p->cameraView.zoom) - 1   // Height of the rectangle with zoom applied
-                            };
-
-                            Vector2 RedDot{
-                                p->cameraView.target.x - (pixelDrawArea.width / 2.0F) * p->cameraView.zoom,
-                                p->cameraView.target.y - (pixelDrawArea.height / 2.0F) * p->cameraView.zoom
-                            };
-                            DrawCircleV(RedDot, 10.0F, RED);
-
-
-
-                            pad = 7.0F;
-                            if (CheckCollisionPointRec(p->mousePosition, PanelOutputImage)) {
-
-                                float zoomSpeed = 0.05F;
-                                float zoom = p->cameraView.zoom;
-                                float wheel = GetMouseWheelMove();
-
-                                if (wheel != 0) {
-                                    p->cameraView.zoom = zoom + (wheel * zoomSpeed * zoom);
-                                    p->cameraView.zoom = Clamp(p->cameraView.zoom, 0.75F, 15.F);
-                                }
-
-                                // Panning
-                                Rectangle viewAreaClean = {
-                                    PanelOutputImage.x + (pad * 1),
-                                    PanelOutputImage.y + (pad * 1),
-                                    PanelOutputImage.width - (pad * 2),
-                                    PanelOutputImage.height - (pad * 2),
-                                };
-
-                                if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
-                                    Vector2 mouseDelta = GetMouseDelta();
-
-                                    p->cameraView.target.x += mouseDelta.x;
-                                    p->cameraView.target.y += mouseDelta.y;
-
-                                    bool minX = dest.x <= PanelOutputImage.x - (dest.width - PanelOutputImage.width + (pad * 1.5F));
-                                    bool maxX = dest.x >= PanelOutputImage.x + (pad * 1.25F);
-
-                                    bool minY = dest.y <= PanelOutputImage.y - (dest.height - PanelOutputImage.height + (pad * 1.5F));
-                                    bool maxY = dest.y >= PanelOutputImage.y + (pad * 1.25F);
-
-                                    //if (minX) p->cameraView.target.x += 1.0F;
-                                    //else if (maxX) p->cameraView.target.x -= 1.0F;
-                                    //else if (minY) p->cameraView.target.y += 1.0F;
-                                    //else if (maxY) p->cameraView.target.y -= 1.0F;
-
-                                    if (minX || maxX) p->cameraView.target.x += (mouseDelta.x);
-                                    if (minY || maxY) p->cameraView.target.y += (mouseDelta.y);
-
-                                    // TODO
-                                    // Needs to clamp the cameraView.target because it can be move farther but the clamping one is the dest rect. not the target.
-
-
-                                }
-                            }
-
-                            EndMode2D();
-                        }
-
-                        dest.x = Clamp(dest.x, PanelOutputImage.x - (dest.width - PanelOutputImage.width + (pad * 1.5F)), PanelOutputImage.x + (pad * 1.25F));
-                        dest.y = Clamp(dest.y, PanelOutputImage.y - (dest.height - PanelOutputImage.height + (pad * 1.5F)), PanelOutputImage.y + (pad * 1.25F));
+                        dest.x = Clamp(dest.x, PanelOutputImage.x - (dest.width - PanelOutputImage.width + (pad * 4.F)), PanelOutputImage.x + (pad * 2.F));
+                        dest.y = Clamp(dest.y, PanelOutputImage.y - (dest.height - PanelOutputImage.height + (pad * 4.F)), PanelOutputImage.y + (pad * 2.F));
 
                         if (dest.width < PanelOutputImage.width && dest.height < PanelOutputImage.height) {
                             // CENTER IN XY
