@@ -1186,12 +1186,12 @@ void UpdateDraw()
                             float zoom = p->liveViewZoom;
                             float wheel = GetMouseWheelMove();
                             static bool zooming = false;
-                            static float step = 0.0F;
+                            static float steps = 0.0F;
 
                             // ZOOMMING
                             if (wheel != 0) {
                                 zooming = true;
-                                step += (wheel * 0.35F);
+                                steps += (wheel * 0.35F);
                             }
 
                             if (zooming) {
@@ -1200,13 +1200,11 @@ void UpdateDraw()
                                     (p->mousePosition.y - dest.y) / dest.height
                                 };
 
-                                // TODO:
-                                // Make the zoom wheel step smoother. not to step.
                                 static float t = 0.0F;
 
-                                float a = Lerp(0, step, t);
-                                p->liveViewZoom = zoom + (a * zoomSpeed * zoom);
-                                p->liveViewZoom = Clamp(p->liveViewZoom, 0.5F, 15.0F);
+                                float zoomVal = Lerp(0, steps, t);
+                                p->liveViewZoom = zoom + (zoomVal * zoomSpeed * zoom);
+                                p->liveViewZoom = Clamp(p->liveViewZoom, 0.75F, 20.0F);
 
                                 dest.width = pixelDrawArea.width * p->liveViewZoom;
                                 dest.height = pixelDrawArea.height * p->liveViewZoom;
@@ -1218,7 +1216,7 @@ void UpdateDraw()
 
                                 if (t >= 1.0F) {
                                     zooming = false;
-                                    step = 0.0F;
+                                    steps = 0.0F;
                                     t = 0.0F;
                                 }
                             }
@@ -1277,7 +1275,7 @@ void UpdateDraw()
                         DrawCircleV(CenterTarget, 10, GREEN);
 
                         // FOR DEBUGGING PANNING CAMERA DESTINATION POSITION
-                        if (1)
+                        if (0)
                         {
                             static bool openDebug = true;
 
@@ -1541,10 +1539,10 @@ void redrawRenderTexture(Rectangle& DrawArea)
 
             float corner = p->g_corner * 0.1F;
             Rectangle pixel = {
-                (float)(int)(tiles.x + (pad * 1)),
-                (float)(int)(tiles.y + (pad * 1)),
-                (float)(int)(tiles.width - (pad * 2)),
-                (float)(int)(tiles.height - (pad * 2)),
+                (float)(tiles.x + (pad * 1)),
+                (float)(tiles.y + (pad * 1)),
+                (float)(tiles.width - (pad * 2)),
+                (float)(tiles.height - (pad * 2)),
             };
 
             Color colorTile = p->ImagePixels[y][x];
@@ -1569,7 +1567,7 @@ void redrawRenderTexture(Rectangle& DrawArea)
         }
     }
     EndTextureMode();
-    SetTextureFilter(p->renderTextureLiveView.texture, TEXTURE_FILTER_TRILINEAR);
+    SetTextureFilter(p->renderTextureLiveView.texture, TEXTURE_FILTER_BILINEAR);
 
     Image temporary = LoadImageFromTexture(p->renderTextureLiveView.texture);
     
@@ -1579,7 +1577,7 @@ void redrawRenderTexture(Rectangle& DrawArea)
         UnloadTexture(p->textureLiveViewSSAA);
     }
     p->textureLiveViewSSAA = LoadTextureFromImage(temporary);
-    SetTextureFilter(p->textureLiveViewSSAA, TEXTURE_FILTER_TRILINEAR);
+    SetTextureFilter(p->textureLiveViewSSAA, TEXTURE_FILTER_BILINEAR);
 
     UnloadImage(temporary);
 }
