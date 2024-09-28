@@ -31,9 +31,12 @@ A simple tool to help illustrate digital image pixels and also as pixelate tools
 - Corner rounding.
 - Pixel range.
 - Title input.
-- Rendering resolution.
+- Rendering resolution: HD, FHD, 4K, 6K.
 - Zoom in out & Panning.
 - Export image to PNG & JPG format.
+
+### Tips:
+- If you still doing setup, set the resolution value to 1 or 2 for faster response. doing it in 3 or 4 make it slower because it has so many data pixel to process.
 
 ### Build with:
 - C++20 in MSVC Visual Studio C++ 2022
