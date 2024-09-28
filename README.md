@@ -32,6 +32,7 @@ A simple tool to help illustrate digital image pixels and also as pixelate tools
 - Pixel range.
 - Title input.
 - Rendering resolution.
+- Zoom in out & Panning.
 - Export image to PNG & JPG format.
 
 ### Build with:
