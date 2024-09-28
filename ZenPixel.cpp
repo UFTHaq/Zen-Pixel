@@ -304,7 +304,7 @@ struct Plug {
     Color ColorLayer1    { BLANK };
     Color ColorLayer2    { 25,32,45,255 };
     Color ColorTitleBar  { 18,26,35,255 };
-    Color ColorPanel     { 40,48,60,255 };
+    Color ColorPanel     { 40,48,55,255 };
     Color ColorPanel2    { 20,25,27,255 };
     Font fontGeneral{};
     Font fontNumberLowRes{};
@@ -657,8 +657,12 @@ void UpdateDraw()
             Rectangle source{ 0,0,100,100 };
             Rectangle dest{ IconExitRect };
             Color color{};
-            if (CheckCollisionPointRec(p->mousePosition, dest))
+            Color iconColor{};
+
+
+            if (CheckCollisionPointRec(p->mousePosition, dest) && IsCursorOnScreen())
             {
+                iconColor = WHITE;
                 color = RED;
                 if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
                 {
@@ -668,10 +672,11 @@ void UpdateDraw()
             }
             else {
                 color = LIGHTGRAY;
+                iconColor = Fade(BLACK, 0.75F);
             }
 
             DrawRectangleRounded(dest, 0.2F, 10, color);
-            DrawTexturePro(p->TexExit, source, dest, {}, 0, WHITE);
+            DrawTexturePro(p->TexExit, source, dest, {}, 0, iconColor);
         }
     }
 
@@ -735,7 +740,7 @@ void UpdateDraw()
                         const char* c_file_path = dropped_file.paths[0];
                         std::string cpp_file_path = std::string(c_file_path);
 
-                        if (IsFileExtension(c_file_path, ".png")) // I dont know why jpg doesnt work.
+                        if (IsFileExtension(c_file_path, ".png"))
                         {
                             if (p->ImageInput.height != 0) UnloadImage(p->ImageInput);
                             p->ImageInput = LoadImage(c_file_path);
@@ -743,7 +748,6 @@ void UpdateDraw()
                             p->flexible_panel_input = FlexibleRectangle(PanelInputImage, p->flexibleSize.w, p->flexibleSize.h);
 
                         }
-                        // I dont know why jpg doesnt work.
                         else if (IsFileExtension(c_file_path, ".jpg") || IsFileExtension(c_file_path, ".jpeg")) {
 
                             // LOAD JPG USING SFML
@@ -795,11 +799,18 @@ void UpdateDraw()
                                 0,0,(float)p->texture_input.width, (float)p->texture_input.height
                             };
                             Rectangle dest{ p->flexible_panel_input };
+
+                            pad = 5.0F;
+                            dest = {
+                                dest.x + (pad * 1),
+                                dest.y + (pad * 1),
+                                dest.width - (pad * 2),
+                                dest.height - (pad * 2)
+                            };
                             DrawTexturePro(p->texture_input, source, dest, { 0,0 }, 0, WHITE);
+                            DrawRectangleLinesEx(dest, 1.5F, p->ColorTitleBar);
                         }
                     }
-                    //DrawRectangleLinesEx(p->flexible_panel_input, 0.5F, WHITE);
-                    DrawRectangleLinesEx(p->flexible_panel_input, 1.5F, p->ColorTitleBar);
 
 
                 }
@@ -1108,7 +1119,8 @@ void UpdateDraw()
                     (float)(int)MainRightSection.height * 0.915F + spacing,
                 };
                 //DrawRectangleLinesEx(PanelOutputImage, 0.5F, WHITE);
-                DrawRectangleRounded(PanelOutputImage, 0.025F, 10, p->ColorPanel);
+                //DrawRectangleRounded(PanelOutputImage, 0.025F, 10, p->ColorPanel);
+                DrawRectangleRounded(PanelOutputImage, 0.025F, 10, p->ColorTitleBar);
 
                 // PanelOutputImage
                 {
@@ -1192,7 +1204,7 @@ void UpdateDraw()
                             // ZOOMMING
                             if (wheel != 0) {
                                 zooming = true;
-                                steps += (wheel * 0.35F);
+                                steps += (wheel * 0.4F);
                             }
 
                             if (zooming) {
@@ -1269,6 +1281,15 @@ void UpdateDraw()
                         DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0, 0 }, 0, WHITE);
                         EndScissorMode();
 
+                        pad = 7.0F;
+                        Rectangle PanelOutputFrame{
+                            PanelOutputImage.x + (pad * 1),
+                            PanelOutputImage.y + (pad * 1),
+                            PanelOutputImage.width - (pad * 2),
+                            PanelOutputImage.height - (pad * 2),
+                        };
+                        //DrawRectangleRoundedLines(PanelOutputFrame, 0.005F, 10, pad, { 25,28,30,255 });
+                        DrawRectangleRoundedLines(PanelOutputFrame, 0.005F, 10, pad, p->ColorPanel);
 
                         // FOR DEBUGGING PANNING CAMERA DESTINATION POSITION
                         if (0)
@@ -1338,21 +1359,12 @@ void UpdateDraw()
 
                                         DrawDebug(data, paramRect);
                                     }
-
                                 }
                             }
                         }
 
+
                     }
-                    
-                    pad = 7.0F;
-                    Rectangle PanelOutputFrame{
-                        PanelOutputImage.x + (pad * 1),
-                        PanelOutputImage.y + (pad * 1),
-                        PanelOutputImage.width - (pad * 2),
-                        PanelOutputImage.height - (pad * 2),
-                    };
-                    DrawRectangleRoundedLines(PanelOutputFrame, 0.005F, 10, pad, { 25,28,30,255 });
                 }
 
                 Rectangle FooterSection{
@@ -1505,7 +1517,8 @@ void redrawRenderTexture(Rectangle& DrawArea)
     }
 
     BeginTextureMode(p->renderTextureLiveView);
-    ClearBackground(p->ColorPanel);
+    //ClearBackground(p->ColorPanel);
+    ClearBackground(p->ColorTitleBar);
 
     float tiles_w = liveViewArea.width / p->ImagePixels[0].size();
     float tiles_h = liveViewArea.height / p->ImagePixels.size();
@@ -1656,8 +1669,6 @@ void InputTextBox(Rectangle& inputTitleBase)
         else {
             text = p->g_inputTitle;
         }
-        //DrawTextMine(inputTitleBase, text, LEFT, 0.8F, BLACK, BLANK);
-        //DrawTextEx(p->fontGeneral, text, text_coor, fontSize, fontSpace, BLACK);
         DrawTextCustom(inputTitleBase, text, LEFT, 0.8F, 1.0F, BLACK);
     }
 }
@@ -1776,11 +1787,7 @@ void LoadSetup(int new_width, int new_height)
         }
         UnloadImageColors(colorPointer);
 
-        std::cout << "Total Pixels : " << smallPixelData.size() << std::endl;
-
-        //for (auto& i : smallPixelData) {
-        //    std::cout << (uint16_t)i.r << " ";
-        //}
+        std::cout << "Total Pixels: " << smallPixelData.size() << " -> [W:" << w << " x H:" << h << "]" << std::endl;
 
         std::vector<std::vector<Color>> matrixSmallImage(h, std::vector<Color>(w));
 
