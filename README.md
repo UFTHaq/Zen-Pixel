@@ -40,7 +40,6 @@ A simple tool to help illustrate digital image pixels and also as pixelate tools
 ### Libraries:
 - Raylib : [https://www.raylib.com](https://www.raylib.com/)
 - SFML : [https://www.sfml-dev.org](https://www.sfml-dev.org/)
-- FFTW3 : [https://www.fftw.org](https://www.fftw.org/)
 
 ### Download:
 - Windows-x64 : Nothing
