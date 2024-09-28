@@ -1131,7 +1131,7 @@ void UpdateDraw()
                         p->flexible_panel_output.height + 0,
                     };
 
-                    float pad = 7.0F;
+                    float pad = 10.0F;
                     Rectangle pixelDrawArea = {
                         (float)(int)p->flexible_panel_output.x + (pad * 1),
                         (float)(int)p->flexible_panel_output.y + (pad * 1),
@@ -1144,10 +1144,10 @@ void UpdateDraw()
 
                         pad = 4.0F;
                         Rectangle newPixelDrawArea = {
-                            (pad * 1),
-                            (pad * 1),
-                            (flexArea.width - (pad * 2)),
-                            (flexArea.height - (pad * 2))
+                            (0),
+                            (0),
+                            (flexArea.width - (0)),
+                            (flexArea.height - (0))
                         };
 
                         if (p->redrawTexture) {
@@ -1206,7 +1206,7 @@ void UpdateDraw()
 
                                 float a = Lerp(0, step, t);
                                 p->liveViewZoom = zoom + (a * zoomSpeed * zoom);
-                                p->liveViewZoom = Clamp(p->liveViewZoom, 0.75F, 15.0F);
+                                p->liveViewZoom = Clamp(p->liveViewZoom, 0.5F, 15.0F);
 
                                 dest.width = pixelDrawArea.width * p->liveViewZoom;
                                 dest.height = pixelDrawArea.height * p->liveViewZoom;
@@ -1231,22 +1231,30 @@ void UpdateDraw()
                             }
                         }
 
-                        dest.x = Clamp(dest.x, PanelOutputImage.x - (dest.width - PanelOutputImage.width + (pad * 4.F)), PanelOutputImage.x + (pad * 2.F));
-                        dest.y = Clamp(dest.y, PanelOutputImage.y - (dest.height - PanelOutputImage.height + (pad * 4.F)), PanelOutputImage.y + (pad * 2.F));
+                        Rectangle PanelOutputView{
+                            PanelOutputImage.x + (pad * 2),
+                            PanelOutputImage.y + (pad * 2),
+                            PanelOutputImage.width - (pad * 2 * 2),
+                            PanelOutputImage.height - (pad * 2 * 2),
+                        };
 
-                        if (dest.width < PanelOutputImage.width && dest.height < PanelOutputImage.height) {
+                        pad = 5.0F;
+                        dest.x = Clamp(dest.x, PanelOutputView.x - (dest.width - PanelOutputView.width + (pad * 2.F)), PanelOutputView.x + (pad * 2.F));
+                        dest.y = Clamp(dest.y, PanelOutputView.y - (dest.height - PanelOutputView.height + (pad * 2.F)), PanelOutputView.y + (pad * 2.F));
+
+                        if (dest.width < PanelOutputView.width && dest.height < PanelOutputView.height) {
                             // CENTER IN XY
-                            dest.x = PanelOutputImage.x + ((PanelOutputImage.width - dest.width) / 2.0F);
-                            dest.y = PanelOutputImage.y + ((PanelOutputImage.height - dest.height) / 2.0F);
+                            dest.x = PanelOutputView.x + ((PanelOutputView.width - dest.width) / 2.0F);
+                            dest.y = PanelOutputView.y + ((PanelOutputView.height - dest.height) / 2.0F);
 
                         }
-                        else if (dest.width < PanelOutputImage.width) {
+                        else if (dest.width < PanelOutputView.width) {
                             // CENTER IN X
-                            dest.x = PanelOutputImage.x + ((PanelOutputImage.width - dest.width) / 2.0F);
+                            dest.x = PanelOutputView.x + ((PanelOutputView.width - dest.width) / 2.0F);
                         }
-                        else if (dest.height < PanelOutputImage.height) {
+                        else if (dest.height < PanelOutputView.height) {
                             // CENTER IN Y
-                            dest.y = PanelOutputImage.y + ((PanelOutputImage.height - dest.height) / 2.0F);
+                            dest.y = PanelOutputView.y + ((PanelOutputView.height - dest.height) / 2.0F);
                         }
 
                         // Apply Scissor Mode to constrain the drawing to the panel area
@@ -1292,7 +1300,7 @@ void UpdateDraw()
 
                                 std::vector<std::string> debugParams{ "RECT", "X", "Y", "W", "H" };
 
-                                int area = 4;
+                                int area = 3;
                                 float w_area = debug.width / area;
                                 for (size_t i = 0; i < area; i++) {
 
