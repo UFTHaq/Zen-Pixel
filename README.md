@@ -12,7 +12,7 @@
 # Zen-Pixel
 Zen Pixel : Illustrate Image Pixelation
 
-A simple tool to help illustrate digital image pixels and also as pixelate tools for pixel art.
+Zen Pixel is a simple tool to visualize and manipulate digital image pixels, designed for pixel art and illustrate image pixelation.
 
 <div align="center">
   <img src="https://github.com/user-attachments/assets/1e35a476-31ae-4c60-b80d-7cd21cff0aa4" width=180/>
