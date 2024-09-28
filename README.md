@@ -46,6 +46,6 @@ Zen Pixel is a simple tool to visualize and manipulate digital image pixels, des
 - SFML : [https://www.sfml-dev.org](https://www.sfml-dev.org/)
 
 ### Download:
-- Windows-x64 : Nothing
+- Windows-x64 : [ZenPixel-v1.0.0-win64.zip](https://github.com/UFTHaq/Zen-Pixel/releases/download/v1.0.0/ZenPixel-v1.0.0-win64.zip)
 
 
