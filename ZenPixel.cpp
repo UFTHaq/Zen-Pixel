@@ -341,6 +341,7 @@ struct Plug {
     std::string g_folderPath{ "Output/" };
     std::string g_exportPath{};
     int notification{OFF_NOTIFICATION};
+    float notificationTime{ 0.0F };
     bool closeThisApp{ false };
 
     Shader shaderRoundedRect{};
@@ -348,7 +349,6 @@ struct Plug {
     RenderTexture2D renderTextureLiveView{};
     Texture2D textureLiveViewSSAA{};
 
-    Camera2D cameraView{};
     bool cameraSetup{ false };
     float liveViewZoom{ 1.0F };
 
@@ -532,7 +532,8 @@ void ExportingHighResImage() {
     highresH = (int)(flexibleHighres.height / SSAA);
 
     ImageResize(&highresImage, highresW, highresH);
-    ExportImage(highresImage, "highres_output.png");
+
+    //ExportImage(highresImage, "highres_output.png");
 
     if (!p->g_inputTitle.empty()) {
         std::string title = p->g_exportPath;
@@ -1268,11 +1269,6 @@ void UpdateDraw()
                         DrawTexturePro(p->textureLiveViewSSAA, source, dest, { 0, 0 }, 0, WHITE);
                         EndScissorMode();
 
-                        Vector2 CenterTarget{
-                            p->cameraView.target.x,
-                            p->cameraView.target.y,
-                        };
-                        DrawCircleV(CenterTarget, 10, GREEN);
 
                         // FOR DEBUGGING PANNING CAMERA DESTINATION POSITION
                         if (0)
@@ -1342,17 +1338,6 @@ void UpdateDraw()
 
                                         DrawDebug(data, paramRect);
                                     }
-                                    else if (i == 3) {
-                                        std::vector<std::string> data{ 
-                                            "TAR", 
-                                            std::to_string((int)p->cameraView.target.x),
-                                            std::to_string((int)p->cameraView.target.y),
-                                            std::to_string((int)p->cameraView.offset.x),
-                                            std::to_string((int)p->cameraView.offset.y),
-                                        };
-
-                                        DrawDebug(data, paramRect);
-                                    }
 
                                 }
                             }
@@ -1384,9 +1369,10 @@ void UpdateDraw()
                     // NOTIFICATION
                     {
                         std::string text{};
+
                         if (p->notification != OFF_NOTIFICATION) {
-                            static float time = 0.0F;
-                            time += GetFrameTime();
+
+                            p->notificationTime -= GetFrameTime();
 
                             if (p->notification == SUCCESS_EXPORT) {
                                 text = "SUCCESS EXPORT TO " + p->g_exportPath;
@@ -1401,9 +1387,9 @@ void UpdateDraw()
                                 DrawNotification(FooterSection, text, LEFT, 0.55F, 1.0, WHITE, RED);
                             }
 
-                            if (time > 5.0F) {
+                            if (p->notificationTime < 0.0F) {
                                 p->notification = OFF_NOTIFICATION;
-                                time = 0.0F;
+                                p->notificationTime = 0.0F;
                             }
                         }
                     }
@@ -1434,6 +1420,7 @@ void UpdateDraw()
                             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                                 p->g_exportPath = p->g_folderPath + p->g_inputTitle + p->g_format;
                                 p->g_exporting = true;
+                                p->notificationTime = 5.0F;
                             }
                         }
                         else {
