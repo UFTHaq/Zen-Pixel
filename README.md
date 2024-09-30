@@ -34,6 +34,11 @@ Zen Pixel is a simple tool to visualize and manipulate digital image pixels, des
 - Rendering resolution: HD, FHD, 4K, 6K.
 - Zoom in out & Panning.
 - Export image to PNG & JPG format.
+- Screenshot:
+<div align="center">
+  <img alt="UI-v1.0.0" src="https://github.com/user-attachments/assets/50f8b394-934b-4ffd-ab8b-237cea6324ad" width="600"/>
+</div>
+
 
 ### Tips:
 - If you still doing setup, set the resolution value to 1 or 2 for faster response. doing it in 3 or 4 make it slower because it has so many data pixel to process.
